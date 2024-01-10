@@ -1,4 +1,4 @@
-package xcfg
+package types
 
 import (
 	"slices"
@@ -15,6 +15,9 @@ type Dict map[string]any
 
 // initialize new Dict with map type conversion
 func NewDict(d Dict) Dict {
+	if d == nil {
+		return make(Dict)
+	}
 	for key, val := range d {
 		switch v := val.(type) {
 		case Dict:

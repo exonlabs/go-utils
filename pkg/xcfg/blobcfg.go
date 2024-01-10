@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
+
+	"github.com/exonlabs/go-utils/pkg/types"
 )
 
 // binary configuration file handler
@@ -11,7 +13,7 @@ type BlobConfig struct {
 	*BaseFileConfig
 }
 
-func NewBlobConfig(filePath string, defaults Dict) *BlobConfig {
+func NewBlobConfig(filePath string, defaults types.Dict) *BlobConfig {
 	return &BlobConfig{
 		BaseFileConfig: NewBaseFileConfig(filePath, defaults),
 	}

@@ -8,6 +8,7 @@ import (
 	"path"
 	"strings"
 
+	"github.com/exonlabs/go-utils/pkg/types"
 	"github.com/exonlabs/go-utils/pkg/xcfg"
 )
 
@@ -22,12 +23,12 @@ var DEFAULTS = map[string]any{
 		"3": "zzz",
 	},
 	"key3": []int{1, 2, 3},
-	"key4": xcfg.Dict{
+	"key4": types.Dict{
 		"a": []int{1, 2, 3},
 		"b": map[string]any{
 			"1": 111,
 			"2": 222,
-			"3": xcfg.Dict{
+			"3": types.Dict{
 				"x": "xxx",
 				"y": "yyy",
 				"z": "zzz",

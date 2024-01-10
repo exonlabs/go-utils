@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
+
+	"github.com/exonlabs/go-utils/pkg/types"
 )
 
 var (
@@ -23,7 +25,7 @@ type FileConfig interface {
 	Save() error
 	Purge() error
 	Dump() ([]byte, error)
-	Buffer() Dict
+	Buffer() types.Dict
 	Keys() []string
 	KeysN(int) []string
 	KeyExist(string) bool
@@ -36,7 +38,7 @@ type FileConfig interface {
 
 // base configuration file handler
 type BaseFileConfig struct {
-	Dict
+	types.Dict
 	filePath string
 
 	// secure data encoding and decoding callback
@@ -44,18 +46,15 @@ type BaseFileConfig struct {
 	Decode func([]byte) ([]byte, error)
 }
 
-func NewBaseFileConfig(filePath string, defaults Dict) *BaseFileConfig {
-	if defaults == nil {
-		defaults = make(Dict)
-	}
+func NewBaseFileConfig(filePath string, defaults types.Dict) *BaseFileConfig {
 	return &BaseFileConfig{
-		Dict:     NewDict(defaults),
+		Dict:     types.NewDict(defaults),
 		filePath: filePath,
 	}
 }
 
 func (fc *BaseFileConfig) Purge() error {
-	fc.Dict = make(Dict)
+	fc.Dict = types.NewDict(nil)
 	if _, err := os.Stat(fc.filePath); !os.IsNotExist(err) {
 		if err := os.Remove(fc.filePath); err != nil {
 			return fmt.Errorf("%w%s", ErrError, err.Error())
@@ -77,7 +76,7 @@ func (fc *BaseFileConfig) Dump() ([]byte, error) {
 }
 
 // return handler to internal Dict object
-func (fc *BaseFileConfig) Buffer() Dict {
+func (fc *BaseFileConfig) Buffer() types.Dict {
 	return fc.Dict
 }
 

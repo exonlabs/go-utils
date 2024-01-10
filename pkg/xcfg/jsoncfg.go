@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
+
+	"github.com/exonlabs/go-utils/pkg/types"
 )
 
 // JSON configuration file handler
@@ -12,7 +14,7 @@ type JsonConfig struct {
 	*BaseFileConfig
 }
 
-func NewJsonConfig(filePath string, defaults Dict) *JsonConfig {
+func NewJsonConfig(filePath string, defaults types.Dict) *JsonConfig {
 	return &JsonConfig{
 		BaseFileConfig: NewBaseFileConfig(filePath, defaults),
 	}
