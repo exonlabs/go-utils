@@ -12,6 +12,7 @@
 *.test
 *.out
 *.vscode
+go.work.sum
 
 # ignore folders
 /dist/
