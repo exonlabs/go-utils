@@ -11,7 +11,7 @@ import (
 
 const (
 	defaultErrorDelay    = float64(1)
-	defaultPollInterval  = float64(0.001)
+	defaultPollInterval  = float64(0.005)
 	defaultPollChunkSize = int(4096)
 	defaultPollMaxSize   = int(0)
 )

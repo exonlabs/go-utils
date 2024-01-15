@@ -2,6 +2,7 @@ package xcomm
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -94,6 +95,8 @@ type SerialConnection struct {
 
 	// low level serial port handler
 	com serial.Port
+	// poll delay relative to baud rate
+	polldelay float64
 
 	// parent server handler
 	parent *SerialListener
@@ -108,6 +111,12 @@ func NewSerialConnection(uri string, log *xlog.Logger) (*SerialConnection, error
 	if err != nil {
 		return nil, err
 	}
+
+	// set delay to actual byte duration, then
+	// take max with defined PollInterval
+	sc.polldelay = math.Max(sc.PollInterval,
+		math.Ceil(10000/float64(sc.mode.BaudRate))/1000)
+
 	return sc, nil
 }
 
@@ -174,12 +183,13 @@ func (sc *SerialConnection) Recv() ([]byte, error) {
 		return nil, ErrNotOpend
 	}
 
+	chk := true
 	data := []byte(nil)
 	for {
 		b := make([]byte, sc.PollChunkSize)
 
 		sc.com.SetReadTimeout(
-			time.Duration(sc.PollInterval * 1000000000))
+			time.Duration(sc.polldelay * 1000000000))
 
 		n, err := sc.com.Read(b)
 		if err != nil {
@@ -192,8 +202,14 @@ func (sc *SerialConnection) Recv() ([]byte, error) {
 		}
 		if n > 0 {
 			data = append(data, b[:n]...)
+			chk = true
 		} else {
-			break
+			// do 1 extra loop to check EOF before break
+			if chk {
+				chk = false
+			} else {
+				break
+			}
 		}
 
 		if sc.PollMaxSize > 0 && len(data) > sc.PollMaxSize {
