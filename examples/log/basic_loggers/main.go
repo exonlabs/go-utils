@@ -20,7 +20,7 @@ func log_messages(logger *xlog.Logger) {
 }
 
 func main() {
-	logger := xlog.GetLogger()
+	logger := xlog.GetRootLogger()
 
 	fmt.Println("\n* logging level: TRACE")
 	logger.Level = xlog.TRACE2

@@ -20,7 +20,7 @@ func log_messages(logger *xlog.Logger) {
 }
 
 func main() {
-	logger := xlog.GetLogger()
+	logger := xlog.GetRootLogger()
 	logger.Level = xlog.DEBUG
 	logger.SetFormatter(xlog.NewStdFormatter(
 		"{time} {level} [{source}] -- root handler, {message}",

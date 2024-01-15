@@ -55,7 +55,7 @@ func main() {
 
 	fmt.Println("***** Starting Connection Client *****")
 
-	log := xlog.GetLogger()
+	log := xlog.GetRootLogger()
 	log.SetFormatter(xlog.NewStdFormatter(
 		"{time} {message}", "2006-01-02 15:04:05.000000"))
 

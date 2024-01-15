@@ -7,7 +7,7 @@ import (
 
 var rootLogger atomic.Value
 
-func GetLogger() *Logger {
+func GetRootLogger() *Logger {
 	if l := rootLogger.Load(); l != nil {
 		return l.(*Logger)
 	}

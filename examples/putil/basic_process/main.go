@@ -69,7 +69,7 @@ func (pr *SampleProcess) handleSigQuit() {
 }
 
 func main() {
-	logger := xlog.GetLogger()
+	logger := xlog.GetRootLogger()
 	logger.Name = "main"
 	logger.SetFormatter(xlog.NewStdFormatter(
 		"{time} {level} [{source}] {message}",

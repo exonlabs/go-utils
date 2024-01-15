@@ -43,7 +43,7 @@ func log_messages(logger *xlog.Logger) {
 }
 
 func main() {
-	logger := xlog.GetLogger()
+	logger := xlog.GetRootLogger()
 	logger.Level = xlog.DEBUG
 
 	fmt.Println("\n* with default formatter:")

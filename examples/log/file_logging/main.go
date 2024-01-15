@@ -22,7 +22,7 @@ func log_messages(logger *xlog.Logger) {
 }
 
 func main() {
-	logger := xlog.GetLogger()
+	logger := xlog.GetRootLogger()
 	logger.Level = xlog.DEBUG
 
 	hnd1 := xlog.NewStdoutHandler()

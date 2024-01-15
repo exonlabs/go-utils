@@ -112,7 +112,7 @@ func CommandHandler(rm *xputil.RtManager, cmd string) (string, error) {
 }
 
 func main() {
-	logger := xlog.GetLogger()
+	logger := xlog.GetRootLogger()
 	logger.Name = "main"
 	logger.SetFormatter(xlog.NewStdFormatter(
 		"{time} {level} [{source}] {message}",
