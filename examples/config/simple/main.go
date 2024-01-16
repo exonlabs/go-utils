@@ -48,7 +48,7 @@ func _print(msg string, data any) {
 	fmt.Println(string(b))
 }
 
-func NewConfig(blob bool) xcfg.FileConfig {
+func NewConfig(blob bool) *xcfg.FileConfig {
 	if blob {
 		CFGFILE = CFGFILE + ".dat"
 		return xcfg.NewBlobConfig(CFGFILE, DEFAULTS)
@@ -70,7 +70,7 @@ func main() {
 		data := map[string]any{
 			"key2.y":   cfg.Get("key2.y", nil),
 			"key3":     cfg.Get("key3", nil),
-			"key4.b.5": []any{1, "2", true, 1.234},
+			"key4.b.5": []any{1, "2", true, 1.2345},
 			"key5":     nil,
 		}
 		for k, v := range data {
@@ -79,7 +79,7 @@ func main() {
 			}
 		}
 
-		_print("\n-- initial config:\n", cfg.Buffer())
+		_print("\n-- initial config:\n", cfg.Buffer)
 
 		fmt.Println("\n-- saving config")
 		if err := cfg.Save(); err != nil {
@@ -103,13 +103,13 @@ func main() {
 	if err := cfg.Load(); err != nil {
 		panic(err)
 	}
-	_print("\n-- loaded config:\n", cfg.Buffer())
+	_print("\n-- loaded config:\n", cfg.Buffer)
 
 	cfg.Set("new_key", 999)
 	cfg.Set("key4.b.دليل", "vvv")
 	cfg.Set("key4.b.3.t", "ttt")
 	cfg.Delete("key1")
-	_print("\n-- modified config:\n", cfg.Buffer())
+	_print("\n-- modified config:\n", cfg.Buffer)
 
 	fmt.Println("\n-- config object:", cfg)
 	fmt.Println("\n-- config keys/values:")
