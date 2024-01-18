@@ -61,7 +61,7 @@ type BaseConnection struct {
 	PollMaxSize   int
 }
 
-func NewBaseConnection(uri string, log *xlog.Logger) *BaseConnection {
+func newBaseConnection(uri string, log *xlog.Logger) *BaseConnection {
 	return &BaseConnection{
 		uri:           strings.TrimSpace(strings.ToLower(uri)),
 		Log:           log,

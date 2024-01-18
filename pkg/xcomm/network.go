@@ -90,7 +90,7 @@ type NetConnection struct {
 // NewNetConnection creates a new SockClient instance
 func NewNetConnection(uri string, log *xlog.Logger) (*NetConnection, error) {
 	nc := &NetConnection{
-		BaseConnection:    NewBaseConnection(uri, log),
+		BaseConnection:    newBaseConnection(uri, log),
 		ConnectTimeout:    defaultConnectTimeout,
 		KeepAliveInterval: defaultKeepAliveInterval,
 	}
@@ -104,6 +104,10 @@ func NewNetConnection(uri string, log *xlog.Logger) (*NetConnection, error) {
 
 func (nc *NetConnection) Parent() Listener {
 	return nc.parent
+}
+
+func (nc *NetConnection) NetHandler() net.Conn {
+	return nc.sock
 }
 
 func (nc *NetConnection) IsOpened() bool {
@@ -269,7 +273,7 @@ type NetListener struct {
 
 func NewNetListener(uri string, log *xlog.Logger) (*NetListener, error) {
 	nl := &NetListener{
-		BaseConnection: NewBaseConnection(uri, log),
+		BaseConnection: newBaseConnection(uri, log),
 		ListenerPool:   defaultListenerPool,
 	}
 	var err error
@@ -278,6 +282,10 @@ func NewNetListener(uri string, log *xlog.Logger) (*NetListener, error) {
 		return nil, err
 	}
 	return nl, nil
+}
+
+func (nc *NetListener) NetHandler() net.Listener {
+	return nc.sock
 }
 
 func (nl *NetListener) IsActive() bool {

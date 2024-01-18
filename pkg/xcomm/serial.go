@@ -104,7 +104,7 @@ type SerialConnection struct {
 
 func NewSerialConnection(uri string, log *xlog.Logger) (*SerialConnection, error) {
 	sc := &SerialConnection{
-		BaseConnection: NewBaseConnection(uri, log),
+		BaseConnection: newBaseConnection(uri, log),
 	}
 	var err error
 	sc.port, sc.mode, err = parseSerialURI(uri)
