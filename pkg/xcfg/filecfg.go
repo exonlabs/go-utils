@@ -9,7 +9,7 @@ import (
 	"github.com/exonlabs/go-utils/pkg/types"
 )
 
-type Buffer = types.Dict
+type Buffer = types.NDict
 
 // configuration file handler
 type FileConfig struct {
@@ -29,7 +29,7 @@ type FileConfig struct {
 // create new json config file handler
 func NewJsonConfig(filePath string, defaults Buffer) *FileConfig {
 	return &FileConfig{
-		Buffer:      types.NewDict(defaults),
+		Buffer:      types.CreateNDict(defaults),
 		filePath:    filePath,
 		fileHandler: &JsonHandler{},
 		dataEncoder: &defaultEncoder{},
@@ -39,7 +39,7 @@ func NewJsonConfig(filePath string, defaults Buffer) *FileConfig {
 // create new blob config file handler
 func NewBlobConfig(filePath string, defaults Buffer) *FileConfig {
 	return &FileConfig{
-		Buffer:      types.NewDict(defaults),
+		Buffer:      types.CreateNDict(defaults),
 		filePath:    filePath,
 		fileHandler: &BlobHandler{},
 		isblob:      true,

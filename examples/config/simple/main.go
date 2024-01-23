@@ -23,12 +23,12 @@ var DEFAULTS = map[string]any{
 		"3": "zzz",
 	},
 	"key3": []int{1, 2, 3},
-	"key4": types.Dict{
+	"key4": types.NDict{
 		"a": []int{1, 2, 3},
 		"b": map[string]any{
 			"1": 111,
 			"2": 222,
-			"3": types.Dict{
+			"3": types.NDict{
 				"x": "xxx",
 				"y": "yyy",
 				"z": "zzz",
