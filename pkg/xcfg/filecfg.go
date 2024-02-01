@@ -27,7 +27,7 @@ type FileConfig struct {
 }
 
 // create new json config file handler
-func NewJsonConfig(filePath string, defaults Buffer) *FileConfig {
+func NewJsonConfig(filePath string, defaults map[string]any) *FileConfig {
 	return &FileConfig{
 		Buffer:      types.CreateNDict(defaults),
 		filePath:    filePath,
@@ -37,7 +37,7 @@ func NewJsonConfig(filePath string, defaults Buffer) *FileConfig {
 }
 
 // create new blob config file handler
-func NewBlobConfig(filePath string, defaults Buffer) *FileConfig {
+func NewBlobConfig(filePath string, defaults map[string]any) *FileConfig {
 	return &FileConfig{
 		Buffer:      types.CreateNDict(defaults),
 		filePath:    filePath,

@@ -1,64 +1,162 @@
 package types
 
 import (
-	"reflect"
 	"slices"
 	"strings"
 )
 
 const (
-	// default nested keys seperator
-	defaultKeySep = string(".")
+	// nested keys seperator
+	sepNDict = "."
 )
 
 // Nested Dict type with nested keys support
 type NDict map[string]any
 
-// create new NDict type from initial map data
-func CreateNDict(d NDict) NDict {
-	if d == nil {
-		return make(NDict)
+// create new NDict from initial map data
+func CreateNDict(buff map[string]any) NDict {
+	if buff == nil {
+		return NDict{}
 	}
-	for key, val := range d {
-		if reflect.TypeOf(val).ConvertibleTo(reflect.TypeOf(NDict{})) {
-			d[key] = CreateNDict(val.(NDict))
+	for key, value := range buff {
+		switch val := value.(type) {
+		case map[string]any:
+			buff[key] = CreateNDict(val)
+		case Dict:
+			buff[key] = CreateNDict(val)
+		case NDict:
+			buff[key] = CreateNDict(val)
+		case []map[string]any:
+			b := []NDict{}
+			for _, v := range val {
+				b = append(b, CreateNDict(v))
+			}
+			buff[key] = b
+		case []Dict:
+			b := []NDict{}
+			for _, v := range val {
+				b = append(b, CreateNDict(v))
+			}
+			buff[key] = b
+		case []NDict:
+			b := []NDict{}
+			for _, v := range val {
+				b = append(b, CreateNDict(v))
+			}
+			buff[key] = b
+		case []any:
+			b := []any{}
+			for _, v := range val {
+				switch v.(type) {
+				case map[string]any, Dict, NDict:
+					b = append(b, CreateNDict(v.(map[string]any)))
+				default:
+					b = append(b, v)
+				}
+			}
+			buff[key] = b
 		}
 	}
-	return d
+	return NDict(buff)
+}
+
+// recursive convert NDict into standard map data
+func StripNDict(buff map[string]any) map[string]any {
+	if buff == nil {
+		return map[string]any{}
+	}
+	for key, value := range buff {
+		switch val := value.(type) {
+		case map[string]any:
+			buff[key] = StripNDict(val)
+		case Dict:
+			buff[key] = StripNDict(val)
+		case NDict:
+			buff[key] = StripNDict(val)
+		case []map[string]any:
+			b := []map[string]any{}
+			for _, v := range val {
+				b = append(b, StripNDict(v))
+			}
+			buff[key] = b
+		case []Dict:
+			b := []map[string]any{}
+			for _, v := range val {
+				b = append(b, StripNDict(v))
+			}
+			buff[key] = b
+		case []NDict:
+			b := []map[string]any{}
+			for _, v := range val {
+				b = append(b, StripNDict(v))
+			}
+			buff[key] = b
+		case []any:
+			b := []any{}
+			for _, sv := range val {
+				switch v := sv.(type) {
+				case map[string]any:
+					b = append(b, StripNDict(v))
+				case Dict:
+					b = append(b, StripNDict(v))
+				case NDict:
+					b = append(b, StripNDict(v))
+				default:
+					b = append(b, v)
+				}
+			}
+			buff[key] = b
+		}
+	}
+	return buff
+}
+
+// return list up to N level nested _keys
+func (d NDict) _keys(lvl int) []string {
+	keys := []string{}
+	for k := range d {
+		if lvl != 1 {
+			if v, ok := d[k].(NDict); ok {
+				for _, sk := range v._keys(lvl - 1) {
+					keys = append(keys, k+sepNDict+sk)
+				}
+				continue
+			}
+		}
+		keys = append(keys, k)
+	}
+	return keys
 }
 
 // return sorted list of all nested level keys
 func (d NDict) Keys() []string {
-	return d.KeysN(0)
+	keys := d._keys(-1)
+	if len(keys) > 0 {
+		slices.Sort(keys)
+	}
+	return keys
 }
 
 // return sorted recursive list up to N level nested keys
 func (d NDict) KeysN(lvl int) []string {
-	keys := []string{}
-	for k := range d {
-		if v, ok := d[k].(NDict); ok && lvl != 1 {
-			for _, sk := range v.KeysN(lvl - 1) {
-				keys = append(keys, k+defaultKeySep+sk)
-			}
-		} else {
-			keys = append(keys, k)
-		}
+	keys := d._keys(lvl)
+	if len(keys) > 0 {
+		slices.Sort(keys)
 	}
-	slices.Sort(keys)
 	return keys
 }
 
 // check if key exist in dict
 func (d NDict) KeyExist(key string) bool {
-	k := strings.SplitN(key, defaultKeySep, 2)
-	if val, ok := d[k[0]]; ok {
-		// if not nested key
-		if len(k) < 2 {
+	k0, kn, next := strings.Cut(key, sepNDict)
+	if val, ok := d[k0]; ok {
+		// not nested key
+		if !next {
 			return true
 		}
-		// if value is of type Dict
+		// value is of type Dict
 		if v, ok := val.(NDict); ok {
-			return v.KeyExist(k[1])
+			return v.KeyExist(kn)
 		}
 	}
 	return false
@@ -66,19 +164,20 @@ func (d NDict) KeyExist(key string) bool {
 
 // get value from dict by key or return default value
 func (d NDict) Get(key string, defval any) any {
-	k := strings.SplitN(key, defaultKeySep, 2)
-	if val, ok := d[k[0]]; ok {
-		// if not nested key
-		if len(k) < 2 {
+	k0, kn, next := strings.Cut(key, sepNDict)
+	if val, ok := d[k0]; ok {
+		// not nested key
+		if !next {
 			return val
 		}
-		// if value is of type Dict
+		// value is of type Dict
 		if v, ok := val.(NDict); ok {
-			return v.Get(k[1], defval)
+			return v.Get(kn, defval)
 		}
 	}
 	return defval
 }
+
 func (d NDict) GetBool(key string, defval bool) bool {
 	if v, ok := d.Get(key, defval).(bool); ok {
 		return v
@@ -166,40 +265,39 @@ func (d NDict) GetFloat64(key string, defval float64) float64 {
 
 // set value in dict by key
 func (d NDict) Set(key string, newval any) {
-	k := strings.SplitN(key, defaultKeySep, 2)
-	// if not nested key
-	if len(k) < 2 {
-		d[k[0]] = newval
-		return
+	k0, kn, next := strings.Cut(key, sepNDict)
+	// not nested key
+	if !next {
+		d[k0] = newval
+	} else {
+		// 1st level key not exist or not of type Dict
+		if _, ok := d[k0].(NDict); !ok {
+			d[k0] = NDict{}
+		}
+		d[k0].(NDict).Set(kn, newval)
 	}
-	// if 1st level key not exist or not of type Dict
-	if _, ok := d[k[0]].(NDict); !ok {
-		d[k[0]] = make(NDict)
-	}
-	val := d[k[0]].(NDict)
-	val.Set(k[1], newval)
 }
 
 // delete value from dict by key
-func (d NDict) Delete(key string) {
-	k := strings.SplitN(key, defaultKeySep, 2)
-	if val, ok := d[k[0]]; ok {
-		// if not nested key
-		if len(k) < 2 {
-			delete(d, k[0])
+func (d NDict) Del(key string) {
+	k0, kn, next := strings.Cut(key, sepNDict)
+	if val, ok := d[k0]; ok {
+		// not nested key
+		if !next {
+			delete(d, k0)
 			return
 		}
-		// if value is of type Dict
+		// value is of type Dict
 		if v, ok := val.(NDict); ok {
-			v.Delete(k[1])
+			v.Del(kn)
 		}
 	}
 }
 
-// update dict with updt dict
-func (d NDict) Update(updt NDict) {
-	buffer := CreateNDict(updt)
-	for _, k := range buffer.Keys() {
-		d.Set(k, buffer.Get(k, nil))
+// update dict from updt dict
+func (d NDict) Update(updt map[string]any) {
+	buff := CreateNDict(updt)
+	for _, k := range buff.Keys() {
+		d.Set(k, buff.Get(k, nil))
 	}
 }

@@ -108,7 +108,7 @@ func main() {
 	cfg.Set("new_key", 999)
 	cfg.Set("key4.b.دليل", "vvv")
 	cfg.Set("key4.b.3.t", "ttt")
-	cfg.Delete("key1")
+	cfg.Del("key1")
 	_print("\n-- modified config:\n", cfg.Buffer)
 
 	fmt.Println("\n-- config object:", cfg)

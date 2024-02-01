@@ -1,18 +1,16 @@
 package types
 
-import (
-	"slices"
-)
+import "slices"
 
 // Simple Dict type
 type Dict map[string]any
 
 // create new Dict type from initial map data
-func CreateDict(d Dict) Dict {
-	if d == nil {
-		return make(Dict)
+func CreateDict(buff map[string]any) Dict {
+	if buff == nil {
+		return Dict{}
 	}
-	return d
+	return Dict(buff)
 }
 
 // return sorted list of all keys
@@ -21,7 +19,9 @@ func (d Dict) Keys() []string {
 	for k := range d {
 		keys = append(keys, k)
 	}
-	slices.Sort(keys)
+	if len(keys) > 0 {
+		slices.Sort(keys)
+	}
 	return keys
 }
 
@@ -38,6 +38,7 @@ func (d Dict) Get(key string, defval any) any {
 	}
 	return defval
 }
+
 func (d Dict) GetBool(key string, defval bool) bool {
 	if v, ok := d[key].(bool); ok {
 		return v
@@ -129,15 +130,15 @@ func (d Dict) Set(key string, newval any) {
 }
 
 // delete value from dict by key
-func (d Dict) Delete(key string) {
+func (d Dict) Del(key string) {
 	if _, ok := d[key]; ok {
 		delete(d, key)
 	}
 }
 
-// update dict with updt dict
-func (d Dict) Update(updt Dict) {
-	for _, key := range updt.Keys() {
-		d[key] = updt[key]
+// update dict from map data
+func (d Dict) Update(updt map[string]any) {
+	for key, val := range updt {
+		d[key] = val
 	}
 }
