@@ -2,92 +2,72 @@ package xlog
 
 import (
 	"errors"
-	"sync/atomic"
 )
 
-var rootLogger atomic.Value
-
-func GetRootLogger() *Logger {
-	if l := rootLogger.Load(); l != nil {
-		return l.(*Logger)
-	}
-	SetRootLogger(NewLogger("root"))
-	return rootLogger.Load().(*Logger)
-}
-
-func SetRootLogger(l *Logger) {
-	rootLogger.Store(l)
-}
-
 type Logger struct {
-	Name     string
-	Level    Level
-	Frmt     Formatter
-	Handlers []Handler
-	Parent   *Logger
-
-	// default handlers state
-	defHndlers bool
+	Name      string
+	Level     Level
+	parent    *Logger
+	formatter *Formatter
+	handlers  []Handler
 }
 
 func NewLogger(name string) *Logger {
 	return &Logger{
-		Name:       name,
-		Level:      INFO,
-		Handlers:   []Handler{NewStdoutHandler()},
-		defHndlers: true,
+		Name:  name,
+		Level: INFO,
 	}
 }
 
 func (l *Logger) NewChildLogger(name string) *Logger {
 	return &Logger{
-		Name:       name,
-		Parent:     l,
-		Level:      l.Level,
-		Handlers:   []Handler{},
-		defHndlers: false,
+		Name:   name,
+		parent: l,
+		Level:  l.Level,
 	}
 }
 
-func (l *Logger) SetFormatter(f Formatter) {
-	l.Frmt = f
-	for _, h := range l.Handlers {
-		h.SetFormatter(l.Frmt)
+func (l *Logger) SetFormatter(f *Formatter) {
+	l.formatter = f
+	if f != nil && l.handlers != nil {
+		for _, h := range l.handlers {
+			h.SetFormatter(f)
+		}
 	}
 }
 
 func (l *Logger) AddHandler(h Handler) {
-	if l.Frmt != nil {
-		h.SetFormatter(l.Frmt)
+	if l.formatter != nil {
+		h.SetFormatter(l.formatter)
 	}
-	if l.defHndlers {
-		l.Handlers = []Handler{}
-		l.defHndlers = false
+	if l.handlers == nil {
+		l.handlers = []Handler{h}
+	} else {
+		l.handlers = append(l.handlers, h)
 	}
-	l.Handlers = append(l.Handlers, h)
 }
 
 func (l *Logger) ClearHandlers() {
-	l.Handlers = []Handler{}
+	l.handlers = nil
 }
 
-func (l *Logger) Log(r Record) error {
-	var resErr error
+func (l *Logger) Log(r *Record) error {
+	var retErr error
 	// handle record with loaded handlers
-	if r.Level >= l.Level {
-		for _, h := range l.Handlers {
+	if l.handlers != nil && r.Level >= l.Level {
+		for _, h := range l.handlers {
 			if err := h.HandleRecord(r); err != nil {
-				resErr = errors.Join(resErr, err)
+				retErr = errors.Join(retErr, err)
 			}
 		}
 	}
 	// propagate to parent logger
-	if l.Parent != nil {
-		if err := l.Parent.Log(r); err != nil {
-			resErr = errors.Join(resErr, err)
+	if l.parent != nil {
+		if err := l.parent.Log(r); err != nil {
+			retErr = errors.Join(retErr, err)
 		}
 	}
-	return resErr
+	return retErr
 }
 
 func (l *Logger) Panic(msg string, args ...any) error {
@@ -119,4 +99,22 @@ func (l *Logger) Trace3(msg string, args ...any) error {
 }
 func (l *Logger) Trace4(msg string, args ...any) error {
 	return l.Log(NewRecord(TRACE4, l.Name, msg, args...))
+}
+
+// ///////////////////// creator functions
+
+func NewStdoutLogger(name string) *Logger {
+	return &Logger{
+		Name:     name,
+		Level:    INFO,
+		handlers: []Handler{NewStdoutHandler()},
+	}
+}
+
+func NewFileLogger(name, path string) *Logger {
+	return &Logger{
+		Name:     name,
+		Level:    INFO,
+		handlers: []Handler{NewFileHandler(path)},
+	}
 }

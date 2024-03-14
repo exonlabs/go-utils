@@ -20,7 +20,7 @@ func log_messages(logger *xlog.Logger) {
 }
 
 func main() {
-	logger := xlog.GetRootLogger()
+	logger := xlog.NewStdoutLogger("main")
 
 	fmt.Println("\n* logging level: TRACE")
 	logger.Level = xlog.TRACE2
@@ -31,11 +31,9 @@ func main() {
 	log_messages(logger)
 
 	// adjust formatters
-	logger.SetFormatter(xlog.NewStdFormatter(
-		"({time}) {level} [{source}] {message}",
-		"2006/01/02 15:04:05.000000"))
+	fmt.Println("\n-- logging with source formatter --")
+	logger.SetFormatter(xlog.NewStdFrmtWithSrc())
 
-	fmt.Println("\n-- with custom logging format --")
 	fmt.Println("\n* logging level: ERROR")
 	logger.Level = xlog.ERROR
 	log_messages(logger)

@@ -3,44 +3,56 @@ package xlog
 import (
 	"fmt"
 	"strings"
-	"sync/atomic"
 )
 
-type Formatter interface {
-	ParseRecord(Record) string
-}
-
-var (
-	defaultFormatter atomic.Value
-)
-
-func init() {
-	SetDefaultFormatter(NewStdFormatter(
-		"{time} {level} {message}", "2006-01-02 15:04:05.000000"))
-}
-
-func GetDefaultFormatter() Formatter {
-	return defaultFormatter.Load().(Formatter)
-}
-
-func SetDefaultFormatter(f Formatter) {
-	defaultFormatter.Store(f)
-}
-
-type StdFormatter struct {
+type Formatter struct {
 	RecordFormat string
 	TimeFormat   string
 }
 
-func NewStdFormatter(recFmt, tsFmt string) StdFormatter {
-	return StdFormatter{recFmt, tsFmt}
+func NewFormatter(recFmt, tsFmt string) *Formatter {
+	return &Formatter{recFmt, tsFmt}
 }
 
-func (f StdFormatter) ParseRecord(r Record) string {
-	return strings.NewReplacer(
-		"{time}", r.Time.Format(f.TimeFormat),
-		"{level}", StringLevel(r.Level),
-		"{source}", r.Source,
-		"{message}", fmt.Sprintf(r.Message, r.MsgArgs...),
-	).Replace(f.RecordFormat)
+func (f *Formatter) ParseRecord(r *Record) string {
+	if r == nil {
+		return ""
+	} else {
+		return strings.NewReplacer(
+			"{time}", r.Time.Format(f.TimeFormat),
+			"{level}", StringLevel(r.Level),
+			"{source}", r.Source,
+			"{message}", fmt.Sprintf(r.Message, r.MsgArgs...),
+		).Replace(f.RecordFormat)
+	}
+}
+
+// ///////////////////// creator functions
+
+func NewStdFrmt() *Formatter {
+	return &Formatter{
+		RecordFormat: "{time} {level} {message}",
+		TimeFormat:   "2006-01-02 15:04:05.000000",
+	}
+}
+
+func NewStdFrmtWithSrc() *Formatter {
+	return &Formatter{
+		RecordFormat: "{time} {level} [{source}] {message}",
+		TimeFormat:   "2006-01-02 15:04:05.000000",
+	}
+}
+
+func NewCustomMsgFrmt(recFmt string) *Formatter {
+	return &Formatter{
+		RecordFormat: recFmt,
+		TimeFormat:   "2006-01-02 15:04:05.000000",
+	}
+}
+
+func NewCustomTimeFrmt(tsFmt string) *Formatter {
+	return &Formatter{
+		RecordFormat: "{time} {level} {message}",
+		TimeFormat:   tsFmt,
+	}
 }

@@ -3,23 +3,23 @@ package xlog
 import "os"
 
 type Handler interface {
-	SetFormatter(Formatter)
-	HandleRecord(Record) error
+	SetFormatter(*Formatter)
+	HandleRecord(*Record) error
 }
 
 // /////////////////////
 
 type BaseHandler struct {
-	Frmt Formatter
+	formatter *Formatter
 }
 
-func (h *BaseHandler) SetFormatter(f Formatter) {
-	h.Frmt = f
+func (h *BaseHandler) SetFormatter(f *Formatter) {
+	h.formatter = f
 }
 
 func NewBaseHandler() *BaseHandler {
 	return &BaseHandler{
-		Frmt: GetDefaultFormatter(),
+		formatter: NewStdFrmt(),
 	}
 }
 
@@ -35,8 +35,8 @@ func NewStdoutHandler() *StdoutHandler {
 	}
 }
 
-func (h *StdoutHandler) HandleRecord(r Record) error {
-	_, err := os.Stdout.WriteString(h.Frmt.ParseRecord(r) + "\n")
+func (h *StdoutHandler) HandleRecord(r *Record) error {
+	_, err := os.Stdout.WriteString(h.formatter.ParseRecord(r) + "\n")
 	return err
 }
 
@@ -54,13 +54,13 @@ func NewFileHandler(path string) *FileHandler {
 	}
 }
 
-func (h *FileHandler) HandleRecord(r Record) error {
+func (h *FileHandler) HandleRecord(r *Record) error {
 	fh, err := os.OpenFile(
 		h.FilePath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0664)
 	if err != nil {
 		return err
 	}
 	defer fh.Close()
-	_, err = fh.WriteString(h.Frmt.ParseRecord(r) + "\n")
+	_, err = fh.WriteString(h.formatter.ParseRecord(r) + "\n")
 	return err
 }

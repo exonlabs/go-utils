@@ -2,31 +2,18 @@ package main
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/exonlabs/go-utils/pkg/xlog"
 )
 
-type Formatter1 struct{}
-
-func (f Formatter1) ParseRecord(r xlog.Record) string {
-	return strings.NewReplacer(
-		"{time}", r.Time.Format("2006/01/02 15:04:05"),
-		"{level}", xlog.StringLevel(r.Level),
-		"{source}", r.Source,
-		"{message}", fmt.Sprintf(r.Message, r.MsgArgs...),
-	).Replace("{time} {level} -- {message}")
+var Formatter1 = &xlog.Formatter{
+	RecordFormat: "{time} {level} -- {message}",
+	TimeFormat:   "2006/01/02 15:04:05",
 }
 
-type Formatter2 struct{}
-
-func (f Formatter2) ParseRecord(r xlog.Record) string {
-	return strings.NewReplacer(
-		"{time}", r.Time.Format("2006-01-02 15:04:05"),
-		"{level}", xlog.StringLevel(r.Level),
-		"{source}", r.Source,
-		"{message}", fmt.Sprintf(r.Message, r.MsgArgs...),
-	).Replace("{time} -- [{level}] -- {message}")
+var Formatter2 = &xlog.Formatter{
+	RecordFormat: "{time} -- [{level}] -- {message}",
+	TimeFormat:   "2006-01-02 15:04:05",
 }
 
 func log_messages(logger *xlog.Logger) {
@@ -43,21 +30,21 @@ func log_messages(logger *xlog.Logger) {
 }
 
 func main() {
-	logger := xlog.GetRootLogger()
+	logger := xlog.NewLogger("main")
 	logger.Level = xlog.DEBUG
 
 	fmt.Println("\n* with default formatter:")
 	log_messages(logger)
 
 	hnd1 := xlog.NewStdoutHandler()
-	hnd1.SetFormatter(Formatter1{})
+	hnd1.SetFormatter(Formatter1)
 	logger.AddHandler(hnd1)
 
 	fmt.Println("\n* with 1 handler using custom formatter:")
 	log_messages(logger)
 
 	hnd2 := xlog.NewStdoutHandler()
-	hnd2.SetFormatter(Formatter2{})
+	hnd2.SetFormatter(Formatter2)
 	logger.AddHandler(hnd2)
 
 	fmt.Println("\n* logging with 2 handlers using custom formatters:")

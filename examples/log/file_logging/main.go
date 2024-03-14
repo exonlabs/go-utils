@@ -22,7 +22,7 @@ func log_messages(logger *xlog.Logger) {
 }
 
 func main() {
-	logger := xlog.GetRootLogger()
+	logger := xlog.NewLogger("main")
 	logger.Level = xlog.DEBUG
 
 	hnd1 := xlog.NewStdoutHandler()
@@ -30,9 +30,7 @@ func main() {
 
 	hnd2 := xlog.NewFileHandler(
 		filepath.Join(os.TempDir(), "foobar.log"))
-	hnd2.SetFormatter(xlog.NewStdFormatter(
-		"{time} {level} [{source}] {message}",
-		"2006-01-02 15:04:05.000000"))
+	hnd2.SetFormatter(xlog.NewStdFrmtWithSrc())
 	logger.AddHandler(hnd2)
 
 	fmt.Println("\n* logging stdout and file:", hnd2.FilePath)

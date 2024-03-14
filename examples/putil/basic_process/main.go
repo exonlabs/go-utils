@@ -69,11 +69,8 @@ func (pr *SampleProcess) handleSigQuit() {
 }
 
 func main() {
-	logger := xlog.GetRootLogger()
-	logger.Name = "main"
-	logger.SetFormatter(xlog.NewStdFormatter(
-		"{time} {level} [{source}] {message}",
-		"2006-01-02 15:04:05.000000"))
+	logger := xlog.NewStdoutLogger("main")
+	logger.SetFormatter(xlog.NewStdFrmtWithSrc())
 
 	defer func() {
 		if r := recover(); r != nil {

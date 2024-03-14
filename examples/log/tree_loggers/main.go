@@ -20,11 +20,10 @@ func log_messages(logger *xlog.Logger) {
 }
 
 func main() {
-	logger := xlog.GetRootLogger()
+	logger := xlog.NewStdoutLogger("main")
 	logger.Level = xlog.DEBUG
-	logger.SetFormatter(xlog.NewStdFormatter(
-		"{time} {level} [{source}] -- root handler, {message}",
-		"2006-01-02 15:04:05.000000"))
+	logger.SetFormatter(xlog.NewCustomMsgFrmt(
+		"{time} {level} [{source}] -- root handler, {message}"))
 
 	fmt.Println("\n* logging parent logger:", logger.Name)
 	log_messages(logger)
@@ -35,18 +34,16 @@ func main() {
 
 	log2 := logger.NewChildLogger("child2")
 	log2.Level = xlog.WARN
-	log2.SetFormatter(xlog.NewStdFormatter(
-		"{time} {level} ({source}) ----- child2 handler, {message}",
-		"2006-01-02 15:04:05.000000"))
+	log2.SetFormatter(xlog.NewCustomMsgFrmt(
+		"{time} {level} ({source}) ----- child2 handler, {message}"))
 	log2.AddHandler(xlog.NewStdoutHandler())
 	fmt.Println("\n* logging child logger (+handlers):", log2.Name)
 	log_messages(log2)
 
 	log21 := log2.NewChildLogger("child21")
 	log21.Level = xlog.INFO
-	log21.SetFormatter(xlog.NewStdFormatter(
-		"{time} {level} ({source}) -------- child21 handler, {message}",
-		"2006-01-02 15:04:05.000000"))
+	log21.SetFormatter(xlog.NewCustomMsgFrmt(
+		"{time} {level} ({source}) -------- child21 handler, {message}"))
 	log21.AddHandler(xlog.NewStdoutHandler())
 	fmt.Println("\n* logging subchild logger (+handlers):", log21.Name)
 	log_messages(log21)

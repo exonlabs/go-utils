@@ -65,11 +65,10 @@ func main() {
 
 	fmt.Println("***** Starting Connection Server *****")
 
-	log := xlog.GetRootLogger()
-	log.SetFormatter(xlog.NewStdFormatter(
-		"{time} {message}", "2006-01-02 15:04:05.000000"))
+	logger := xlog.NewStdoutLogger("main")
+	logger.SetFormatter(xlog.NewStdFrmtWithSrc())
 
-	srv, err := xcomm.NewListener(*uri, log)
+	srv, err := xcomm.NewListener(*uri, logger)
 	if err != nil {
 		panic(err)
 	}
