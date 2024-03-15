@@ -6,12 +6,18 @@ import (
 	"testing"
 
 	"github.com/exonlabs/go-utils/pkg/types"
+	"github.com/exonlabs/go-utils/tests"
 )
 
 type NDictAlias = map[string]any
 type NDictAlt map[string]any
 type NDictSlAlias = []map[string]any
 type NDictSlAlt []map[string]any
+
+func print_data(d any) string {
+	return fmt.Sprintf(
+		"\n%#v\n-----------------------------------------------", d)
+}
 
 func TestCreateNDict_MixedTypes(t *testing.T) {
 	d := types.CreateNDict(NDictAlt{
@@ -34,8 +40,7 @@ func TestCreateNDict_MixedTypes(t *testing.T) {
 			nil,
 		},
 	})
-	t.Logf(">> input:\n%#v", d)
-	t.Logf("--------------------------------")
+	t.Logf(">> input: %s", print_data(d))
 
 	validation := types.NDict{
 		"k1": "some value",
@@ -54,10 +59,10 @@ func TestCreateNDict_MixedTypes(t *testing.T) {
 			{"x": "xxx", "y": nil, "z": "zzz"},
 			{}},
 	}
-	if !reflect.DeepEqual(d, validation) {
-		t.Errorf("xxx failed validation check\n")
+	if reflect.DeepEqual(d, validation) {
+		t.Logf(tests.ValidMsg())
 	} else {
-		t.Logf("--- ok: valid\n")
+		t.Errorf(tests.FailMsg()+" -- expecting: %s", print_data(validation))
 	}
 }
 
@@ -93,8 +98,7 @@ func TestCreateNDict_DeepNesting(t *testing.T) {
 			},
 		},
 	})
-	t.Logf(">> input:\n%#v", d)
-	t.Logf("--------------------------------")
+	t.Logf(">> input: %s", print_data(d))
 
 	validation := types.NDict{
 		"k1": "some value",
@@ -127,10 +131,10 @@ func TestCreateNDict_DeepNesting(t *testing.T) {
 			},
 		},
 	}
-	if !reflect.DeepEqual(d, validation) {
-		t.Errorf("xxx failed validation check\n")
+	if reflect.DeepEqual(d, validation) {
+		t.Logf(tests.ValidMsg())
 	} else {
-		t.Logf("--- ok: valid\n")
+		t.Errorf(tests.FailMsg()+" -- expecting: %s", print_data(validation))
 	}
 }
 
@@ -155,19 +159,20 @@ func TestStripNDict_MixedTypes(t *testing.T) {
 			nil,
 		},
 	}
-	t.Logf(">> input:\n%#v", buff)
-	t.Logf("--------------------------------")
+	t.Logf(">> input: %s", print_data(buff))
 
 	rbuff := types.StripNDict(types.CreateNDict(buff))
 	if !reflect.DeepEqual(rbuff, buff) {
-		t.Errorf("xxx failed strip check, got %#v\n", rbuff)
+		t.Errorf(tests.RedText("FAILED, 1 level strip check")+
+			" -- got: %s", print_data(rbuff))
 	} else {
 		// strip non NDict type
 		rbuff = types.StripNDict(rbuff)
 		if !reflect.DeepEqual(rbuff, buff) {
-			t.Errorf("xxx failed double strip check, got %#v\n", rbuff)
+			t.Errorf(tests.RedText("FAILED, 2 level strip check")+
+				" -- got: %s", print_data(rbuff))
 		} else {
-			t.Logf("--- ok: valid\n")
+			t.Logf(tests.ValidMsg())
 		}
 	}
 }
@@ -204,8 +209,7 @@ func TestNDict_Keys(t *testing.T) {
 			},
 		},
 	})
-	t.Logf(">> input:\n%#v", d)
-	t.Logf("--------------------------------")
+	t.Logf(">> input: %s", print_data(d))
 
 	validations := []map[int][]string{
 		{1: {"k1", "k2", "k3", "k4"}},
@@ -232,8 +236,11 @@ func TestNDict_Keys(t *testing.T) {
 		for din, dout := range validation {
 			res := d.KeysN(din)
 			t.Logf("--- lvl %v = %#v", din, res)
-			if !reflect.DeepEqual(res, dout) {
-				t.Errorf("xxx failed check for lvl: %v\n", din)
+			if reflect.DeepEqual(res, dout) {
+				t.Logf(tests.ValidMsg())
+			} else {
+				t.Errorf(tests.RedText(
+					fmt.Sprintf("FAILED check for lvl: %v", din)))
 			}
 		}
 	}
@@ -257,8 +264,7 @@ func TestNDict_KeyExist(t *testing.T) {
 			},
 		},
 	})
-	t.Logf(">> input:\n%#v", d)
-	t.Logf("--------------------------------")
+	t.Logf(">> input: %s", print_data(d))
 
 	validations := []map[string]bool{
 		{"k1": true}, {"k1.xx": false},
@@ -278,8 +284,11 @@ func TestNDict_KeyExist(t *testing.T) {
 		for din, dout := range validation {
 			res := d.KeyExist(din)
 			t.Logf("--- %v exist %#v", din, res)
-			if !reflect.DeepEqual(res, dout) {
-				t.Errorf("xxx failed check for key: %v\n", din)
+			if reflect.DeepEqual(res, dout) {
+				t.Logf(tests.ValidMsg())
+			} else {
+				t.Errorf(tests.RedText(
+					fmt.Sprintf("FAILED check for key: %v", din)))
 			}
 		}
 	}
@@ -310,8 +319,7 @@ func TestNDict_Get(t *testing.T) {
 			},
 		},
 	})
-	t.Logf(">> input:\n%#v", d)
-	t.Logf("--------------------------------")
+	t.Logf(">> input: %s", print_data(d))
 
 	validations := []map[string]any{
 		{"k1": "some value"}, {"k1.xx": nil},
@@ -328,8 +336,11 @@ func TestNDict_Get(t *testing.T) {
 		for k, v := range validation {
 			res := d.Get(k, nil)
 			t.Logf("--- %v = %#v", k, res)
-			if !reflect.DeepEqual(res, v) {
-				t.Errorf("xxx failed check for key: %v\n", k)
+			if reflect.DeepEqual(res, v) {
+				t.Logf(tests.ValidMsg())
+			} else {
+				t.Errorf(tests.RedText(
+					fmt.Sprintf("FAILED check for key: %v", k)))
 			}
 		}
 	}
@@ -339,16 +350,18 @@ func TestNDict_Get(t *testing.T) {
 		k := fmt.Sprintf("k7.t[%v].3.2.1", i)
 		res := v.Get("3.2.1", nil)
 		t.Logf("--- %v = %#v", k, res)
-		if !reflect.DeepEqual(res, "xxx") {
-			t.Errorf("xxx failed check for key: %v\n", k)
+		if reflect.DeepEqual(res, "xxx") {
+			t.Logf(tests.ValidMsg())
+		} else {
+			t.Errorf(tests.RedText(
+				fmt.Sprintf("FAILED check for key: %v", k)))
 		}
 	}
 }
 
 func TestNDict_Set(t *testing.T) {
 	d := types.CreateNDict(nil)
-	t.Logf(">> input:\n%#v", d)
-	t.Logf("--------------------------------")
+	t.Logf(">> input: %s", print_data(d))
 
 	validations := []map[string]any{
 		{"k1": "some value"},
@@ -363,8 +376,11 @@ func TestNDict_Set(t *testing.T) {
 			d.Set(k, v)
 			t.Logf(">> set %v = %#v\n--- %#v", k, v, d)
 			res := d.Get(k, nil)
-			if !reflect.DeepEqual(res, v) {
-				t.Errorf("xxx failed 'Set' check for key: %v\n", k)
+			if reflect.DeepEqual(res, v) {
+				t.Logf(tests.ValidMsg())
+			} else {
+				t.Errorf(tests.RedText(
+					fmt.Sprintf("FAILED 'Set' check for key: %v", k)))
 			}
 		}
 	}
@@ -384,8 +400,7 @@ func TestNDict_Del(t *testing.T) {
 			},
 		},
 	})
-	t.Logf(">> input:\n%#v", d)
-	t.Logf("--------------------------------")
+	t.Logf(">> input: %s", print_data(d))
 
 	validations := []string{
 		"k3.2.xxx", "k4.b.3", "k4.b.4",
@@ -394,8 +409,11 @@ func TestNDict_Del(t *testing.T) {
 		d.Del(k)
 		t.Logf(">> Del %v\n--- %#v", k, d)
 		res := d.Get(k, nil)
-		if !reflect.DeepEqual(res, nil) {
-			t.Errorf("xxx failed 'Del' check for key: %v\n", k)
+		if reflect.DeepEqual(res, nil) {
+			t.Logf(tests.ValidMsg())
+		} else {
+			t.Errorf(tests.RedText(
+				fmt.Sprintf("FAILED 'Del' check for key: %v", k)))
 		}
 	}
 }
@@ -414,8 +432,7 @@ func TestNDict_Update(t *testing.T) {
 			},
 		},
 	})
-	t.Logf(">> input:\n%#v", d)
-	t.Logf("--------------------------------")
+	t.Logf(">> input: %s", print_data(d))
 
 	updt := map[string]any{
 		"k3": map[string]any{"1": "111", "2": 222},
@@ -424,8 +441,7 @@ func TestNDict_Update(t *testing.T) {
 			"c": "ccc",
 		},
 		"3": 333}
-	t.Logf(">> update:\n%#v", updt)
-	t.Logf("--------------------------------")
+	t.Logf(">> update: %s", print_data(updt))
 
 	validation := types.NDict{
 		"k1": "some value",
@@ -443,9 +459,11 @@ func TestNDict_Update(t *testing.T) {
 	}
 
 	d.Update(updt)
-	if !reflect.DeepEqual(d, validation) {
-		t.Errorf("xxx failed 'Updt' check %#v\n", d)
+	if reflect.DeepEqual(d, validation) {
+		t.Logf(tests.ValidMsg() +
+			fmt.Sprintf(" --- result: %s", print_data(d)))
 	} else {
-		t.Logf("--- result: %#v\n", d)
+		t.Errorf(tests.RedText("FAILED 'Updt' check") +
+			fmt.Sprintf(" --- got: %s", print_data(d)))
 	}
 }
