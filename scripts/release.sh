@@ -7,7 +7,7 @@ VERSION=$(cat ${VER_FILE} |head -n 1 |xargs |sed 's|\.dev.*||g')
 RELEASE_TAG=v${VERSION}
 
 
-echo -e "\n* Releasing: ${RELEASE_TAG}"
+echo -e "\n* Releasing: ${VERSION}"
 
 # check previous versions tags
 if git tag |grep -wq "${RELEASE_TAG}" ;then
@@ -19,9 +19,9 @@ fi
 echo -e "${VERSION}" > ${VER_FILE}
 
 # setting release tag
-git commit -m "Release version '${VERSION}'" ${VER_FILE}
+git commit -m "Release '${VERSION}'" ${VER_FILE}
 if ! git tag "${RELEASE_TAG}" ;then
-    echo -e "\n-- Error!! failed adding tag '${RELEASE_TAG}'\n"
+    echo -e "\n-- Error!! failed commit and adding tag '${RELEASE_TAG}'\n"
     exit 1
 fi
 
