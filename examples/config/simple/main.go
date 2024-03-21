@@ -12,7 +12,10 @@ import (
 	"github.com/exonlabs/go-utils/pkg/xcfg"
 )
 
-var CFGFILE = path.Join(os.TempDir(), "sample_config")
+var (
+	CFGFILE = path.Join(os.TempDir(), "sample_config.json")
+	SECRET  = "12345678"
+)
 
 // mixed Dict and map[string]any definitions
 var DEFAULTS = map[string]any{
@@ -43,27 +46,23 @@ var DEFAULTS = map[string]any{
 }
 
 func _print(msg string, data any) {
-	fmt.Printf(msg)
+	fmt.Println(msg)
 	b, _ := json.MarshalIndent(data, "", "  ")
 	fmt.Println(string(b))
 }
 
-func NewConfig(blob bool) *xcfg.FileConfig {
-	if blob {
-		CFGFILE = CFGFILE + ".dat"
-		return xcfg.NewBlobConfig(CFGFILE, DEFAULTS)
-	}
-	CFGFILE = CFGFILE + ".json"
-	return xcfg.NewJsonConfig(CFGFILE, DEFAULTS)
+func NewConfig() *xcfg.JsonConfig {
+	cfg := xcfg.NewJsonConfig(CFGFILE, DEFAULTS)
+	cfg.SetAES128(SECRET)
+	return cfg
 }
 
 func main() {
 	init := flag.Bool("init", false, "initialize config file")
-	blob := flag.Bool("blob", false, "use binary config files mode")
 	flag.Parse()
 
 	if *init {
-		cfg := NewConfig(*blob)
+		cfg := NewConfig()
 		fmt.Println("\n* using cfg file:", CFGFILE)
 
 		// add/set default secure data
@@ -79,7 +78,7 @@ func main() {
 			}
 		}
 
-		_print("\n-- initial config:\n", cfg.Buffer)
+		_print("\n-- initial config:", cfg.Buffer)
 
 		fmt.Println("\n-- saving config")
 		if err := cfg.Save(); err != nil {
@@ -87,9 +86,9 @@ func main() {
 		}
 
 		fmt.Println("\n" + strings.Repeat("-", 50))
-		fmt.Println("file dump")
+		fmt.Println("file contents")
 		fmt.Println(strings.Repeat("-", 50))
-		if data, err := (cfg.Dump()); err != nil {
+		if data, err := os.ReadFile(CFGFILE); err != nil {
 			panic(err)
 		} else {
 			fmt.Println(string(data))
@@ -98,20 +97,21 @@ func main() {
 		return
 	}
 
-	cfg := NewConfig(*blob)
+	cfg := NewConfig()
 	fmt.Println("\n* using cfg file:", CFGFILE)
-	if err := cfg.Load(); err != nil {
-		panic(err)
+	if cfg.IsExist() {
+		if err := cfg.Load(); err != nil {
+			panic(err)
+		}
 	}
-	_print("\n-- loaded config:\n", cfg.Buffer)
+	_print("\n-- loaded config:", cfg.Buffer)
 
 	cfg.Set("new_key", 999)
 	cfg.Set("key4.b.دليل", "vvv")
 	cfg.Set("key4.b.3.t", "ttt")
 	cfg.Del("key1")
-	_print("\n-- modified config:\n", cfg.Buffer)
+	_print("\n-- modified config:", cfg.Buffer)
 
-	fmt.Println("\n-- config object:", cfg)
 	fmt.Println("\n-- config keys/values:")
 	for _, k := range cfg.Keys() {
 		fmt.Printf("%s = %v\n", k, cfg.Get(k, nil))

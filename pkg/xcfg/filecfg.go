@@ -1,137 +1,195 @@
 package xcfg
 
 import (
-	"encoding/hex"
-	"errors"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"os"
 
+	"github.com/exonlabs/go-utils/pkg/crypto/xcipher"
 	"github.com/exonlabs/go-utils/pkg/types"
 )
 
 type Buffer = types.NDict
 
 // configuration file handler
-type FileConfig struct {
+type fileConfig struct {
 	Buffer
 
 	// config filepath on disk
-	filePath string
-	// data format handler
-	fileHandler Handler
-	// flag for binary file format
-	isblob bool
+	filepath string
+	bakpath  string
 
-	// secure data encoding and decoding handler
-	dataEncoder Encoder
+	// load and dump callback func pointers
+	loader func([]byte) error
+	dumper func() ([]byte, error)
+
+	// cipher object
+	cipher xcipher.Cipher
 }
 
 // create new json config file handler
-func NewJsonConfig(filePath string, defaults map[string]any) *FileConfig {
-	return &FileConfig{
-		Buffer:      types.CreateNDict(defaults),
-		filePath:    filePath,
-		fileHandler: &JsonHandler{},
-		dataEncoder: &defaultEncoder{},
+func newFileConfig(filepath string, defaults map[string]any) *fileConfig {
+	return &fileConfig{
+		Buffer:   types.CreateNDict(defaults),
+		filepath: filepath,
 	}
 }
 
-// create new blob config file handler
-func NewBlobConfig(filePath string, defaults map[string]any) *FileConfig {
-	return &FileConfig{
-		Buffer:      types.CreateNDict(defaults),
-		filePath:    filePath,
-		fileHandler: &BlobHandler{},
-		isblob:      true,
-		dataEncoder: &defaultEncoder{},
+// enable config file backup support
+func (cfg *fileConfig) EnableBackup(bakpath string) {
+	if bakpath != "" {
+		cfg.bakpath = bakpath
+	} else {
+		cfg.bakpath = cfg.filepath + ".backup"
 	}
 }
 
-// implement the Stringer interface
-func (cfg *FileConfig) String() string {
-	return fmt.Sprintf("<%sConfig: %s %v>",
-		cfg.fileHandler.Type(), cfg.filePath, cfg.Buffer)
+// reset local buffer
+func (cfg *fileConfig) Reset() {
+	cfg.Buffer = Buffer(nil)
 }
 
-// set new encoder
-func (cfg *FileConfig) SetEncoder(enc Encoder) {
-	if enc != nil {
-		cfg.dataEncoder = enc
+// check config file exist on disk
+func (cfg *fileConfig) IsExist() bool {
+	_, err := os.Stat(cfg.filepath)
+	return !os.IsNotExist(err)
+}
+
+// check backup config file exist on disk, if backup support enabled.
+func (cfg *fileConfig) IsBackupExist() bool {
+	if cfg.bakpath != "" {
+		_, err := os.Stat(cfg.bakpath)
+		return !os.IsNotExist(err)
 	}
+	return false
 }
 
-// load data from file and update current config buffer
-func (cfg *FileConfig) Load() error {
-	if err := cfg.fileHandler.Load(cfg); err != nil {
-		return fmt.Errorf("%w, %s", ErrLoadFailed, err.Error())
-	}
-	return nil
-}
-
-// save current config buffer to file
-func (cfg *FileConfig) Save() error {
-	if err := cfg.fileHandler.Save(cfg); err != nil {
-		return fmt.Errorf("%w, %s", ErrSaveFailed, err.Error())
-	}
-	return nil
-}
-
-// delete config file from disk and purge reset config buffer
-func (cfg *FileConfig) Purge() error {
-	if _, err := os.Stat(cfg.filePath); !os.IsNotExist(err) {
-		if err := os.Remove(cfg.filePath); err != nil {
-			return fmt.Errorf("%w%s", ErrError, err.Error())
+// read raw bytes content of config file, if error: then check and
+// read the backup file if backup support enabled.
+func (cfg *fileConfig) Load() error {
+	var b []byte
+	var err error
+	if cfg.IsExist() {
+		b, err = os.ReadFile(cfg.filepath)
+		if err == nil {
+			err = cfg.loader(b)
+			if err == nil {
+				cfg.saveBackup(b)
+				return nil
+			}
 		}
 	}
-	cfg.Buffer = Buffer(nil)
+	if cfg.IsBackupExist() {
+		b, err = os.ReadFile(cfg.bakpath)
+		if err == nil {
+			err = cfg.loader(b)
+			if err == nil {
+				return cfg.Save()
+			}
+		}
+	}
+	return err
+}
+
+// write raw bytes content to config file, if not error: then check and
+// write backup config if backup support enabled.
+func (cfg *fileConfig) Save() error {
+	b, err := cfg.dumper()
+	if err != nil {
+		return err
+	}
+	err = os.WriteFile(cfg.filepath, b, 0o666)
+	if err != nil {
+		return err
+	}
+	return cfg.saveBackup(b)
+}
+func (cfg *fileConfig) saveBackup(b []byte) error {
+	if cfg.bakpath != "" {
+		return os.WriteFile(cfg.bakpath, b, 0o666)
+	}
 	return nil
 }
 
-// return the raw byte contents of config file
-func (cfg *FileConfig) Dump() ([]byte, error) {
-	if _, err := os.Stat(cfg.filePath); os.IsNotExist(err) {
-		return nil, ErrFileNotExist
+// delete config and backup files from disk and reset local buffer
+func (cfg *fileConfig) Purge() error {
+	cfg.Reset()
+	if cfg.IsBackupExist() {
+		os.Remove(cfg.bakpath)
 	}
-	data, err := os.ReadFile(cfg.filePath)
+	if cfg.IsExist() {
+		return os.Remove(cfg.filepath)
+	}
+	return nil
+}
+
+// //////////////////////////////////////////
+
+func (cfg *fileConfig) SetAES128(secret string) error {
+	cipher, err := xcipher.NewAES128(secret)
 	if err != nil {
-		return nil, fmt.Errorf("%w%s", ErrError, err.Error())
+		return err
 	}
-	return data, nil
+	cfg.cipher = cipher
+	return nil
+}
+
+func (cfg *fileConfig) SetAES256(secret string) error {
+	cipher, err := xcipher.NewAES256(secret)
+	if err != nil {
+		return err
+	}
+	cfg.cipher = cipher
+	return nil
 }
 
 // get secure value from config by key
-func (cfg *FileConfig) GetSecure(key string, defval any) (any, error) {
-	if cfg.isblob {
-		return cfg.Get(key, defval), nil
+func (cfg *fileConfig) GetSecure(key string, defval any) (any, error) {
+	if cfg.cipher == nil {
+		return nil, fmt.Errorf("security is not configured")
 	}
 	data := cfg.Get(key, nil)
 	if data == nil {
 		// key not exist
 		return defval, nil
 	}
-	err := errors.New("invalid data format")
 	if d, ok := data.(string); ok {
-		b, err := hex.DecodeString(d)
-		if err == nil {
-			val, err := cfg.dataEncoder.Decode(b)
-			if err == nil {
-				return val, nil
-			}
+		if len(d) == 0 {
+			// empty key
+			return defval, nil
 		}
+		b, err := base64.StdEncoding.DecodeString(d)
+		if err != nil {
+			return nil, err
+		}
+		b, err = cfg.cipher.Decrypt(b)
+		if err != nil {
+			return nil, err
+		}
+		var val any
+		err = json.Unmarshal(b, &val)
+		if err != nil {
+			return nil, err
+		}
+		return val, nil
 	}
-	return nil, fmt.Errorf("%w, %s", ErrDecodeFailed, err.Error())
+	return nil, fmt.Errorf("invalid value format")
 }
 
 // set secure value in config by key, creates key if not exist
-func (cfg *FileConfig) SetSecure(key string, newval any) error {
-	if cfg.isblob {
-		cfg.Set(key, newval)
-		return nil
+func (cfg *fileConfig) SetSecure(key string, val any) error {
+	if cfg.cipher == nil {
+		return fmt.Errorf("security is not configured")
 	}
-	if b, err := cfg.dataEncoder.Encode(newval); err != nil {
-		return fmt.Errorf("%w, %s", ErrEncodeFailed, err.Error())
-	} else {
-		cfg.Set(key, hex.EncodeToString(b))
+	b, err := json.Marshal(val)
+	if err != nil {
+		return err
 	}
+	b, err = cfg.cipher.Encrypt(b)
+	if err != nil {
+		return err
+	}
+	cfg.Set(key, base64.StdEncoding.EncodeToString(b))
 	return nil
 }
