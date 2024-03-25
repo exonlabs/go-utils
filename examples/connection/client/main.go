@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 
@@ -11,15 +12,19 @@ import (
 func run(cli xcomm.Connection) {
 	err := cli.Open()
 	if err != nil {
+		if errors.Is(err, xcomm.ErrBreak) {
+			return
+		}
 		panic(err)
 	}
 	defer cli.Close()
 
 	t := cli.Type()
-	if t == "TCP" || t == "UDP" {
+	if t != "serial" {
 		if data, err := cli.RecvWait(5); err == nil {
 			fmt.Printf("received: %d  %s", len(data), string(data))
 			fmt.Println("--------------------------------")
+			cli.Sleep(1)
 		}
 	}
 
@@ -43,7 +48,7 @@ func run(cli xcomm.Connection) {
 			return
 		}
 
-		// cli.Sleep(1)
+		cli.Sleep(1)
 	}
 }
 

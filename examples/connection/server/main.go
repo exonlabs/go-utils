@@ -59,7 +59,7 @@ func HandleConnectionMulti(conn xcomm.Connection) {
 func main() {
 	uri := flag.String("uri", "", "connection uri\n"+
 		"serial:  serial@/dev/ttyUSB0:115200:8N1\n"+
-		"tcp:     tcp@127.0.0.1:1234\n")
+		"tcp:     tcp@0.0.0.0:1234\n")
 	multi := flag.Bool("multi", false, "handle multiple connections")
 	flag.Parse()
 
@@ -73,9 +73,9 @@ func main() {
 		panic(err)
 	}
 	if *multi {
-		srv.SetHandler(HandleConnectionMulti)
+		srv.SetConnHandler(HandleConnectionMulti)
 	} else {
-		srv.SetHandler(HandleConnection)
+		srv.SetConnHandler(HandleConnection)
 	}
 	if err := srv.Start(); err != nil {
 		panic(err)

@@ -11,11 +11,11 @@ import (
 	"go.bug.st/serial"
 )
 
-const (
-	defaultXONXOFF = bool(false)
-	defaultRTSCTS  = bool(false)
-	defaultDSRDTR  = bool(false)
-)
+// const (
+// 	defaultXONXOFF = bool(false)
+// 	defaultRTSCTS  = bool(false)
+// 	defaultDSRDTR  = bool(false)
+// )
 
 // Serial Connection URI
 //
@@ -33,17 +33,16 @@ const (
 
 // parse and validate uri
 func parseSerialURI(uri string) (string, serial.Mode, error) {
+	var err error
+
 	p := strings.SplitN(uri, "@", 2)
 	if len(p) < 2 || p[0] != "serial" {
 		return "", serial.Mode{}, ErrInvalidUri
 	}
-
 	p = strings.Split(p[1], ":")
 	if len(p) < 3 || len(p[2]) != 3 {
 		return "", serial.Mode{}, ErrInvalidUri
 	}
-
-	var err error
 
 	mode := serial.Mode{}
 	mode.BaudRate, err = strconv.Atoi(p[1])
@@ -82,7 +81,6 @@ func parseSerialURI(uri string) (string, serial.Mode, error) {
 	// }
 
 	return p[0], mode, nil
-
 }
 
 // //////////////////////////////////////////////////
@@ -90,33 +88,34 @@ func parseSerialURI(uri string) (string, serial.Mode, error) {
 // Serial Connection
 type SerialConnection struct {
 	*BaseConnection
+
 	port string
 	mode serial.Mode
 
 	// low level serial port handler
 	com serial.Port
-	// poll delay relative to baud rate
-	polldelay float64
 
 	// parent server handler
 	parent *SerialListener
+
+	// poll delay relative to baud rate
+	polldelay float64
 }
 
-func NewSerialConnection(uri string, log *xlog.Logger) (*SerialConnection, error) {
+func NewSerialConnection(
+	uri string, log *xlog.Logger) (*SerialConnection, error) {
+	var err error
 	sc := &SerialConnection{
 		BaseConnection: newBaseConnection(uri, log),
 	}
-	var err error
 	sc.port, sc.mode, err = parseSerialURI(uri)
 	if err != nil {
 		return nil, err
 	}
-
 	// set delay to actual byte duration, then
 	// take max with defined PollInterval
 	sc.polldelay = math.Max(sc.PollInterval,
 		math.Ceil(10000/float64(sc.mode.BaudRate))/1000)
-
 	return sc, nil
 }
 
@@ -124,8 +123,12 @@ func (sc *SerialConnection) Parent() Listener {
 	return sc.parent
 }
 
+func (sc *SerialConnection) PortHandler() serial.Port {
+	return sc.com
+}
+
 func (sc *SerialConnection) IsOpened() bool {
-	return bool(sc.com != nil)
+	return !(sc.evtKill.IsSet() || sc.com == nil)
 }
 
 func (sc *SerialConnection) Open() error {
@@ -137,6 +140,7 @@ func (sc *SerialConnection) Open() error {
 	sc.log("OPEN -- %s", sc.uri)
 
 	var err error
+
 	sc.com, err = serial.Open(sc.port, &sc.mode)
 	if err != nil {
 		return fmt.Errorf("%w, %s", ErrOpen, err.Error())
@@ -155,31 +159,39 @@ func (sc *SerialConnection) Close() {
 	sc.com = nil
 }
 
+// cancel blocking operations
+func (sc *SerialConnection) Cancel() {
+	sc.evtBreak.Set()
+	if sc.ctxCancel != nil {
+		sc.ctxCancel()
+		sc.ctxCancel = nil
+	}
+}
+
 // Sends data over the serial connection
 func (sc *SerialConnection) Send(data []byte) error {
-	if data == nil || len(data) == 0 {
+	if len(data) == 0 {
 		return fmt.Errorf("%w, empty data", ErrError)
 	}
-	if sc.com == nil {
+	if !sc.IsOpened() {
 		return ErrNotOpend
 	}
-
 	sc.txLog(data)
 	_, err := sc.com.Write(data)
 	sc.com.Drain()
 	if err != nil {
 		if errIsClosed(err) {
 			sc.Close()
+			return ErrClosed
 		}
 		return fmt.Errorf("%w, %s", ErrWrite, err.Error())
 	}
-
 	return nil
 }
 
 // Recv data from the socket connection
 func (sc *SerialConnection) Recv() ([]byte, error) {
-	if sc.com == nil {
+	if !sc.IsOpened() {
 		return nil, ErrNotOpend
 	}
 
@@ -237,7 +249,7 @@ func (sc *SerialConnection) RecvWait(timeout float64) ([]byte, error) {
 		data, err := sc.Recv()
 		if err != nil {
 			return nil, err
-		} else if data != nil && len(data) > 0 {
+		} else if len(data) > 0 {
 			return data, nil
 		}
 		if sc.evtKill.IsSet() {
@@ -250,11 +262,6 @@ func (sc *SerialConnection) RecvWait(timeout float64) ([]byte, error) {
 			return nil, ErrTimeout
 		}
 	}
-}
-
-// cancel blocking operations
-func (sc *SerialConnection) Cancel() {
-	sc.evtBreak.Set()
 }
 
 // //////////////////////////////////////////////////
@@ -277,6 +284,14 @@ func NewSerialListener(uri string, log *xlog.Logger) (*SerialListener, error) {
 	}, nil
 }
 
+func (sl *SerialListener) PortHandler() serial.Port {
+	return sl.com
+}
+
+func (sl *SerialListener) SetConnHandler(f func(Connection)) {
+	sl.connHandler = f
+}
+
 func (sl *SerialListener) IsActive() bool {
 	return sl.IsOpened()
 }
@@ -295,7 +310,7 @@ func (sl *SerialListener) Start() error {
 }
 
 func (sl *SerialListener) run() {
-	for !sl.evtKill.IsSet() {
+	for sl.IsActive() {
 		sl.connHandler(sl)
 		sl.Sleep(1)
 	}
@@ -303,8 +318,4 @@ func (sl *SerialListener) run() {
 
 func (sl *SerialListener) Stop() {
 	sl.Close()
-}
-
-func (sl *SerialListener) SetHandler(f func(Connection)) {
-	sl.connHandler = f
 }

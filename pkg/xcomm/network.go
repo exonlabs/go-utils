@@ -1,6 +1,7 @@
 package xcomm
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"path/filepath"
@@ -58,8 +59,7 @@ func parseNetURI(uri string) (string, string, error) {
 			return "", "", ErrInvalidUri
 		}
 	case "unix", "unixgram", "unixpacket":
-		if p[1][len(p[1])-1] == filepath.Separator ||
-			filepath.IsAbs(p[1]) != true {
+		if p[1][len(p[1])-1] == filepath.Separator || !filepath.IsAbs(p[1]) {
 			return "", "", ErrInvalidUri
 		}
 	}
@@ -72,6 +72,7 @@ func parseNetURI(uri string) (string, string, error) {
 // Network Connection
 type NetConnection struct {
 	*BaseConnection
+
 	network string
 	address string
 
@@ -88,13 +89,14 @@ type NetConnection struct {
 }
 
 // NewNetConnection creates a new SockClient instance
-func NewNetConnection(uri string, log *xlog.Logger) (*NetConnection, error) {
+func NewNetConnection(
+	uri string, log *xlog.Logger) (*NetConnection, error) {
+	var err error
 	nc := &NetConnection{
 		BaseConnection:    newBaseConnection(uri, log),
 		ConnectTimeout:    defaultConnectTimeout,
 		KeepAliveInterval: defaultKeepAliveInterval,
 	}
-	var err error
 	nc.network, nc.address, err = parseNetURI(uri)
 	if err != nil {
 		return nil, err
@@ -111,7 +113,7 @@ func (nc *NetConnection) NetHandler() net.Conn {
 }
 
 func (nc *NetConnection) IsOpened() bool {
-	return bool(nc.sock != nil)
+	return !(nc.evtKill.IsSet() || nc.sock == nil)
 }
 
 // Opens the socket connection
@@ -124,10 +126,16 @@ func (nc *NetConnection) Open() error {
 	nc.log("OPEN -- %s", nc.uri)
 
 	var err error
+	var ctx context.Context
 
-	nc.sock, err = net.DialTimeout(
-		nc.network, nc.address, time.Duration(nc.ConnectTimeout*1000000000))
-	if err != nil {
+	ctx, nc.ctxCancel = context.WithCancel(context.Background())
+	d := net.Dialer{
+		Timeout: time.Duration(nc.ConnectTimeout * 1000000000)}
+	nc.sock, err = d.DialContext(ctx, nc.network, nc.address)
+	nc.ctxCancel = nil
+	if ctx.Err() != nil {
+		return ErrBreak
+	} else if err != nil {
 		return fmt.Errorf("%w, %s", ErrOpen, err.Error())
 	}
 
@@ -156,20 +164,29 @@ func (nc *NetConnection) Close() {
 	nc.sock = nil
 }
 
+// cancel blocking operations
+func (nc *NetConnection) Cancel() {
+	nc.evtBreak.Set()
+	if nc.ctxCancel != nil {
+		nc.ctxCancel()
+		nc.ctxCancel = nil
+	}
+}
+
 // Sends data over the socket connection
 func (nc *NetConnection) Send(data []byte) error {
-	if data == nil || len(data) == 0 {
+	if len(data) == 0 {
 		return fmt.Errorf("%w, empty data", ErrError)
 	}
-	if nc.sock == nil {
+	if !nc.IsOpened() {
 		return ErrNotOpend
 	}
-
 	nc.txLog(data)
 	_, err := nc.sock.Write(data)
 	if err != nil {
 		if errIsClosed(err) {
 			nc.Close()
+			return ErrClosed
 		}
 		return fmt.Errorf("%w, %s", ErrWrite, err.Error())
 	}
@@ -178,7 +195,7 @@ func (nc *NetConnection) Send(data []byte) error {
 
 // Recv data from the socket connection
 func (nc *NetConnection) Recv() ([]byte, error) {
-	if nc.sock == nil {
+	if !nc.IsOpened() {
 		return nil, ErrNotOpend
 	}
 
@@ -235,7 +252,7 @@ func (nc *NetConnection) RecvWait(timeout float64) ([]byte, error) {
 		data, err := nc.Recv()
 		if err != nil {
 			return nil, err
-		} else if data != nil && len(data) > 0 {
+		} else if len(data) > 0 {
 			return data, nil
 		}
 		if nc.evtKill.IsSet() {
@@ -250,19 +267,17 @@ func (nc *NetConnection) RecvWait(timeout float64) ([]byte, error) {
 	}
 }
 
-// cancel blocking operations
-func (nc *NetConnection) Cancel() {
-	nc.evtBreak.Set()
-}
-
 // //////////////////////////////////////////////////
 
 // Network Listener
 type NetListener struct {
 	*BaseConnection
+
 	network string
 	address string
-	sock    net.Listener
+
+	// low level network listener handler
+	sock net.Listener
 
 	// callback connection handler function
 	connHandler func(Connection)
@@ -272,11 +287,11 @@ type NetListener struct {
 }
 
 func NewNetListener(uri string, log *xlog.Logger) (*NetListener, error) {
+	var err error
 	nl := &NetListener{
 		BaseConnection: newBaseConnection(uri, log),
 		ListenerPool:   defaultListenerPool,
 	}
-	var err error
 	nl.network, nl.address, err = parseNetURI(uri)
 	if err != nil {
 		return nil, err
@@ -288,13 +303,17 @@ func (nc *NetListener) NetHandler() net.Listener {
 	return nc.sock
 }
 
+func (nl *NetListener) SetConnHandler(f func(Connection)) {
+	nl.connHandler = f
+}
+
 func (nl *NetListener) IsActive() bool {
-	return bool(nl.sock != nil)
+	return !(nl.evtKill.IsSet() || nl.sock == nil)
 }
 
 func (nl *NetListener) Start() error {
 	if nl.connHandler == nil {
-		return fmt.Errorf("%w, invalid connection handler", ErrOpen)
+		return fmt.Errorf("%w, connection handler not set", ErrOpen)
 	}
 
 	nl.Stop()
@@ -315,7 +334,7 @@ func (nl *NetListener) Start() error {
 }
 
 func (nl *NetListener) run() {
-	for !nl.evtKill.IsSet() {
+	for nl.IsActive() {
 		nc_sock, err := nl.sock.Accept()
 		if err != nil {
 			nl.log("TRACE -- %s", err.Error())
@@ -326,7 +345,7 @@ func (nl *NetListener) run() {
 		nc, err := NewNetConnection(nc_uri, nl.Log)
 		nc.sock = nc_sock
 		nc.parent = nl
-		nc.logUri = true
+		nc.uriLogging = true
 		if err != nil {
 			nl.log("TRACE -- %s", err.Error())
 			continue
@@ -343,8 +362,4 @@ func (nl *NetListener) Stop() {
 		nl.log("CLOSE -- %s", nl.uri)
 	}
 	nl.sock = nil
-}
-
-func (nl *NetListener) SetHandler(f func(Connection)) {
-	nl.connHandler = f
 }

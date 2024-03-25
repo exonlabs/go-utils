@@ -1,6 +1,7 @@
 package xcomm
 
 import (
+	"context"
 	"encoding/hex"
 	"fmt"
 	"strings"
@@ -24,10 +25,10 @@ type Connection interface {
 	IsOpened() bool
 	Open() error
 	Close()
+	Cancel()
 	Send([]byte) error
 	Recv() ([]byte, error)
 	RecvWait(float64) ([]byte, error)
-	Cancel()
 	Sleep(float64) bool
 }
 
@@ -39,18 +40,19 @@ type Listener interface {
 	Start() error
 	Stop()
 	Sleep(float64) bool
-	SetHandler(func(Connection))
+	SetConnHandler(func(Connection))
 }
 
 // BaseConnection is a base structure for connection handling
 type BaseConnection struct {
-	Log    *xlog.Logger
-	uri    string
-	logUri bool
+	Log        *xlog.Logger
+	uri        string
+	uriLogging bool
 
 	// operation events
-	evtBreak *xevent.Event
-	evtKill  *xevent.Event
+	evtBreak  *xevent.Event
+	evtKill   *xevent.Event
+	ctxCancel context.CancelFunc
 
 	// error delay for execution loop
 	ErrorDelay float64
@@ -102,7 +104,7 @@ func (bs *BaseConnection) log(msg string, args ...any) {
 func (bs *BaseConnection) txLog(data []byte) {
 	if bs.Log != nil && data != nil {
 		msg := "TX >> " + strings.ToUpper(hex.EncodeToString(data))
-		if bs.logUri {
+		if bs.uriLogging {
 			msg = "[" + bs.uri + "]  " + msg
 		}
 		bs.Log.Info(msg)
@@ -113,7 +115,7 @@ func (bs *BaseConnection) txLog(data []byte) {
 func (bs *BaseConnection) rxLog(data []byte) {
 	if bs.Log != nil && data != nil {
 		msg := "RX << " + strings.ToUpper(hex.EncodeToString(data))
-		if bs.logUri {
+		if bs.uriLogging {
 			msg = "[" + bs.uri + "]  " + msg
 		}
 		bs.Log.Info(msg)
