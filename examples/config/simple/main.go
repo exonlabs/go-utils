@@ -53,7 +53,7 @@ func _print(msg string, data any) {
 
 func NewConfig() *xcfg.JsonConfig {
 	cfg := xcfg.NewJsonConfig(CFGFILE, DEFAULTS)
-	cfg.SetAES128(SECRET)
+	cfg.InitAES128(SECRET)
 	return cfg
 }
 

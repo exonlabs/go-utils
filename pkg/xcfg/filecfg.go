@@ -126,7 +126,7 @@ func (cfg *fileConfig) Purge() error {
 
 // //////////////////////////////////////////
 
-func (cfg *fileConfig) SetAES128(secret string) error {
+func (cfg *fileConfig) InitAES128(secret string) error {
 	cipher, err := xcipher.NewAES128(secret)
 	if err != nil {
 		return err
@@ -135,7 +135,7 @@ func (cfg *fileConfig) SetAES128(secret string) error {
 	return nil
 }
 
-func (cfg *fileConfig) SetAES256(secret string) error {
+func (cfg *fileConfig) InitAES256(secret string) error {
 	cipher, err := xcipher.NewAES256(secret)
 	if err != nil {
 		return err

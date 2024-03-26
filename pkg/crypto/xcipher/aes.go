@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/sha512"
+	"errors"
 	"io"
 )
 
@@ -21,6 +22,9 @@ type aesCipher struct {
 
 // encryption using AES-GCM
 func (ciph *aesCipher) Encrypt(in []byte) ([]byte, error) {
+	if len(in) == 0 {
+		return nil, errors.New("malformed data for encryption")
+	}
 	nonce := make([]byte, ciph.aead.NonceSize())
 	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
 		return nil, err
@@ -32,6 +36,9 @@ func (ciph *aesCipher) Encrypt(in []byte) ([]byte, error) {
 // decryption using AES-GCM
 func (ciph *aesCipher) Decrypt(in []byte) ([]byte, error) {
 	n := ciph.aead.NonceSize()
+	if len(in) <= n {
+		return nil, errors.New("malformed data for decryption")
+	}
 	out, err := ciph.aead.Open(nil, in[:n], in[n:], ciph.aad)
 	if err != nil {
 		return nil, err
