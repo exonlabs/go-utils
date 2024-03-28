@@ -31,7 +31,7 @@ type fileConfig struct {
 // create new json config file handler
 func newFileConfig(filepath string, defaults map[string]any) *fileConfig {
 	return &fileConfig{
-		Buffer:   types.CreateNDict(defaults),
+		Buffer:   types.NewNDict(defaults),
 		filepath: filepath,
 	}
 }

@@ -14,34 +14,34 @@ const (
 type NDict map[string]any
 
 // create new NDict from initial map data
-func CreateNDict(buff map[string]any) NDict {
+func NewNDict(buff map[string]any) NDict {
 	if buff == nil {
 		return NDict{}
 	}
 	for key, value := range buff {
 		switch val := value.(type) {
 		case map[string]any:
-			buff[key] = CreateNDict(val)
+			buff[key] = NewNDict(val)
 		case Dict:
-			buff[key] = CreateNDict(val)
+			buff[key] = NewNDict(val)
 		case NDict:
-			buff[key] = CreateNDict(val)
+			buff[key] = NewNDict(val)
 		case []map[string]any:
 			b := []NDict{}
 			for _, v := range val {
-				b = append(b, CreateNDict(v))
+				b = append(b, NewNDict(v))
 			}
 			buff[key] = b
 		case []Dict:
 			b := []NDict{}
 			for _, v := range val {
-				b = append(b, CreateNDict(v))
+				b = append(b, NewNDict(v))
 			}
 			buff[key] = b
 		case []NDict:
 			b := []NDict{}
 			for _, v := range val {
-				b = append(b, CreateNDict(v))
+				b = append(b, NewNDict(v))
 			}
 			buff[key] = b
 		case []any:
@@ -49,7 +49,7 @@ func CreateNDict(buff map[string]any) NDict {
 			for _, v := range val {
 				switch v.(type) {
 				case map[string]any, Dict, NDict:
-					b = append(b, CreateNDict(v.(map[string]any)))
+					b = append(b, NewNDict(v.(map[string]any)))
 				default:
 					b = append(b, v)
 				}
@@ -58,6 +58,15 @@ func CreateNDict(buff map[string]any) NDict {
 		}
 	}
 	return NDict(buff)
+}
+
+// create new []NDict from initial []map data
+func NewNDictSlice(buff []map[string]any) []NDict {
+	res := []NDict{}
+	for _, v := range buff {
+		res = append(res, NewNDict(v))
+	}
+	return res
 }
 
 // recursive convert NDict into standard map data
@@ -111,6 +120,18 @@ func StripNDict(buff map[string]any) map[string]any {
 	return buff
 }
 
+// recursive convert []NDict into standard []map data
+func StripNDictSlice(buff []NDict) []map[string]any {
+	res := []map[string]any{}
+	if buff == nil {
+		return res
+	}
+	for _, v := range buff {
+		res = append(res, StripNDict(v))
+	}
+	return res
+}
+
 // return list up to N level nested _keys
 func (d NDict) _keys(lvl int) []string {
 	keys := []string{}
@@ -147,7 +168,7 @@ func (d NDict) KeysN(lvl int) []string {
 }
 
 // check if key exist in dict
-func (d NDict) KeyExist(key string) bool {
+func (d NDict) IsExist(key string) bool {
 	k0, kn, next := strings.Cut(key, sepNDict)
 	if val, ok := d[k0]; ok {
 		// not nested key
@@ -156,7 +177,7 @@ func (d NDict) KeyExist(key string) bool {
 		}
 		// value is of type Dict
 		if v, ok := val.(NDict); ok {
-			return v.KeyExist(kn)
+			return v.IsExist(kn)
 		}
 	}
 	return false
@@ -178,6 +199,18 @@ func (d NDict) Get(key string, defval any) any {
 	return defval
 }
 
+func (d NDict) GetDict(key string, defval Dict) Dict {
+	if v, ok := d.Get(key, defval).(Dict); ok {
+		return v
+	}
+	return defval
+}
+func (d NDict) GetNDict(key string, defval NDict) NDict {
+	if v, ok := d.Get(key, defval).(NDict); ok {
+		return v
+	}
+	return defval
+}
 func (d NDict) GetBool(key string, defval bool) bool {
 	if v, ok := d.Get(key, defval).(bool); ok {
 		return v
@@ -186,6 +219,12 @@ func (d NDict) GetBool(key string, defval bool) bool {
 }
 func (d NDict) GetString(key string, defval string) string {
 	if v, ok := d.Get(key, defval).(string); ok {
+		return v
+	}
+	return defval
+}
+func (d NDict) GetByte(key string, defval byte) byte {
+	if v, ok := d.Get(key, defval).(byte); ok {
 		return v
 	}
 	return defval
@@ -263,6 +302,109 @@ func (d NDict) GetFloat64(key string, defval float64) float64 {
 	return defval
 }
 
+func (d NDict) GetDictSlice(key string, defval []Dict) []Dict {
+	if v, ok := d.Get(key, defval).([]Dict); ok {
+		return v
+	}
+	return defval
+}
+func (d NDict) GetNDictSlice(key string, defval []NDict) []NDict {
+	if v, ok := d.Get(key, defval).([]NDict); ok {
+		return v
+	}
+	return defval
+}
+func (d NDict) GetBoolSlice(key string, defval []bool) []bool {
+	if v, ok := d[key].([]bool); ok {
+		return v
+	}
+	return defval
+}
+func (d NDict) GetStringSlice(key string, defval []string) []string {
+	if v, ok := d[key].([]string); ok {
+		return v
+	}
+	return defval
+}
+func (d NDict) GetByteSlice(key string, defval []byte) []byte {
+	if v, ok := d[key].([]byte); ok {
+		return v
+	}
+	return defval
+}
+func (d NDict) GetIntSlice(key string, defval []int) []int {
+	if v, ok := d[key].([]int); ok {
+		return v
+	}
+	return defval
+}
+func (d NDict) GetInt8Slice(key string, defval []int8) []int8 {
+	if v, ok := d[key].([]int8); ok {
+		return v
+	}
+	return defval
+}
+func (d NDict) GetInt16Slice(key string, defval []int16) []int16 {
+	if v, ok := d[key].([]int16); ok {
+		return v
+	}
+	return defval
+}
+func (d NDict) GetInt32Slice(key string, defval []int32) []int32 {
+	if v, ok := d[key].([]int32); ok {
+		return v
+	}
+	return defval
+}
+func (d NDict) GetInt64Slice(key string, defval []int64) []int64 {
+	if v, ok := d[key].([]int64); ok {
+		return v
+	}
+	return defval
+}
+func (d NDict) GetUintSlice(key string, defval []uint) []uint {
+	if v, ok := d[key].([]uint); ok {
+		return v
+	}
+	return defval
+}
+func (d NDict) GetUint8Slice(key string, defval []uint8) []uint8 {
+	if v, ok := d[key].([]uint8); ok {
+		return v
+	}
+	return defval
+}
+func (d NDict) GetUint16Slice(key string, defval []uint16) []uint16 {
+	if v, ok := d[key].([]uint16); ok {
+		return v
+	}
+	return defval
+}
+func (d NDict) GetUint32Slice(key string, defval []uint32) []uint32 {
+	if v, ok := d[key].([]uint32); ok {
+		return v
+	}
+	return defval
+}
+func (d NDict) GetUint64Slice(key string, defval []uint64) []uint64 {
+	if v, ok := d[key].([]uint64); ok {
+		return v
+	}
+	return defval
+}
+func (d NDict) GetFloat32Slice(key string, defval []float32) []float32 {
+	if v, ok := d[key].([]float32); ok {
+		return v
+	}
+	return defval
+}
+func (d NDict) GetFloat64Slice(key string, defval []float64) []float64 {
+	if v, ok := d[key].([]float64); ok {
+		return v
+	}
+	return defval
+}
+
 // set value in dict by key
 func (d NDict) Set(key string, newval any) {
 	k0, kn, next := strings.Cut(key, sepNDict)
@@ -296,7 +438,7 @@ func (d NDict) Del(key string) {
 
 // update dict from updt dict
 func (d NDict) Update(updt map[string]any) {
-	buff := CreateNDict(updt)
+	buff := NewNDict(updt)
 	for _, k := range buff.Keys() {
 		d.Set(k, buff.Get(k, nil))
 	}

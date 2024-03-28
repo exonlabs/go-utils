@@ -20,7 +20,7 @@ func print_data(d any) string {
 }
 
 func TestCreateNDict_MixedTypes(t *testing.T) {
-	d := types.CreateNDict(NDictAlt{
+	d := types.NewNDict(NDictAlt{
 		"k1": "some value",
 		"k2": map[string]any{"1": "111", "2": true, "3": 333},
 		"k3": []int{1, 2, 3},
@@ -67,7 +67,7 @@ func TestCreateNDict_MixedTypes(t *testing.T) {
 }
 
 func TestCreateNDict_DeepNesting(t *testing.T) {
-	d := types.CreateNDict(NDictAlt{
+	d := types.NewNDict(NDictAlt{
 		"k1": "some value",
 		"k2": map[string]any{"1": "xxx", "2": "yyy"},
 		"k3": NDictAlt{"1": "xxx", "2": "yyy"},
@@ -138,6 +138,57 @@ func TestCreateNDict_DeepNesting(t *testing.T) {
 	}
 }
 
+func TestCreateNDictSlice_MixedTypes(t *testing.T) {
+	d := types.NewNDictSlice([]NDictAlias{
+		{
+			"k1": "some value",
+			"k2": map[string]any{"1": "111", "2": true, "3": 333},
+			"k3": []int{1, 2, 3},
+			"k4": NDictAlias{
+				"a": []any{
+					"1", 2, false, nil,
+					NDictAlias{"x": "xxx", "y": nil, "z": "zzz"}},
+			},
+		},
+		{
+			"k1": "some value",
+			"k4": NDictAlias{
+				"b": map[string]any{
+					"1": 111, "2": "222", "3": nil,
+					"4": NDictAlt{"x": "xxx", "y": nil, "z": "zzz"},
+					"5": NDictAlias{"x": "xxx", "y": nil, "z": "zzz"}},
+			},
+		},
+	})
+	t.Logf(">> input: %s", print_data(d))
+
+	validation := []types.NDict{
+		{
+			"k1": "some value",
+			"k2": types.NDict{"1": "111", "2": true, "3": 333},
+			"k3": []int{1, 2, 3},
+			"k4": types.NDict{
+				"a": []any{
+					"1", 2, false, nil,
+					types.NDict{"x": "xxx", "y": nil, "z": "zzz"}},
+			},
+		},
+		{
+			"k1": "some value",
+			"k4": types.NDict{
+				"b": types.NDict{
+					"1": 111, "2": "222", "3": nil,
+					"4": NDictAlt{"x": "xxx", "y": nil, "z": "zzz"},
+					"5": types.NDict{"x": "xxx", "y": nil, "z": "zzz"}},
+			},
+		},
+	}
+	if reflect.DeepEqual(d, validation) {
+		t.Logf(tests.ValidMsg())
+	} else {
+		t.Errorf(tests.FailMsg()+" -- expecting: %s", print_data(validation))
+	}
+}
 func TestStripNDict_MixedTypes(t *testing.T) {
 	buff := NDictAlias{
 		"k1": "some value",
@@ -161,24 +212,49 @@ func TestStripNDict_MixedTypes(t *testing.T) {
 	}
 	t.Logf(">> input: %s", print_data(buff))
 
-	rbuff := types.StripNDict(types.CreateNDict(buff))
+	rbuff := types.StripNDict(types.NewNDict(buff))
 	if !reflect.DeepEqual(rbuff, buff) {
 		t.Errorf(tests.RedText("FAILED, 1 level strip check")+
 			" -- got: %s", print_data(rbuff))
 	} else {
-		// strip non NDict type
-		rbuff = types.StripNDict(rbuff)
-		if !reflect.DeepEqual(rbuff, buff) {
-			t.Errorf(tests.RedText("FAILED, 2 level strip check")+
-				" -- got: %s", print_data(rbuff))
-		} else {
-			t.Logf(tests.ValidMsg())
-		}
+		t.Logf(tests.ValidMsg())
 	}
 }
 
+func TestStripNDictSlice_MixedTypes(t *testing.T) {
+	buff := []NDictAlias{
+		{
+			"k1": "some value",
+			"k2": map[string]any{"1": "111", "2": true, "3": 333},
+			"k3": []int{1, 2, 3},
+			"k4": NDictAlias{
+				"a": []any{
+					"1", 2, false, nil,
+					NDictAlias{"x": "xxx", "y": nil, "z": "zzz"}},
+			},
+		},
+		{
+			"k1": "some value",
+			"k4": NDictAlias{
+				"b": map[string]any{
+					"1": 111, "2": "222", "3": nil,
+					"4": NDictAlt{"x": "xxx", "y": nil, "z": "zzz"},
+					"5": NDictAlias{"x": "xxx", "y": nil, "z": "zzz"}},
+			},
+		},
+	}
+	t.Logf(">> input: %s", print_data(buff))
+
+	rbuff := types.StripNDictSlice(types.NewNDictSlice(buff))
+	if !reflect.DeepEqual(rbuff, buff) {
+		t.Errorf(tests.RedText("FAILED, 1 level strip check")+
+			" -- got: %s", print_data(rbuff))
+	} else {
+		t.Logf(tests.ValidMsg())
+	}
+}
 func TestNDict_Keys(t *testing.T) {
-	d := types.CreateNDict(NDictAlt{
+	d := types.NewNDict(NDictAlt{
 		"k1": "some value",
 		"k2": map[string]any{"1": "xxx", "2": "yyy"},
 		"k3": NDictAlt{"1": "xxx", "2": "yyy"},
@@ -247,7 +323,7 @@ func TestNDict_Keys(t *testing.T) {
 }
 
 func TestNDict_KeyExist(t *testing.T) {
-	d := types.CreateNDict(NDictAlias{
+	d := types.NewNDict(NDictAlias{
 		"k1": "some value",
 		"k2": map[string]any{"1": "xxx", "2": "yyy"},
 		"k3": NDictAlt{"1": "xxx", "2": "yyy"},
@@ -282,7 +358,7 @@ func TestNDict_KeyExist(t *testing.T) {
 	}
 	for _, validation := range validations {
 		for din, dout := range validation {
-			res := d.KeyExist(din)
+			res := d.IsExist(din)
 			t.Logf("--- %v exist %#v", din, res)
 			if reflect.DeepEqual(res, dout) {
 				t.Logf(tests.ValidMsg())
@@ -295,7 +371,7 @@ func TestNDict_KeyExist(t *testing.T) {
 }
 
 func TestNDict_Get(t *testing.T) {
-	d := types.CreateNDict(NDictAlias{
+	d := types.NewNDict(NDictAlias{
 		"k1": "some value",
 		"k2": map[string]any{"1": "xxx", "2": "yyy"},
 		"k3": NDictAlt{"1": "xxx", "2": "yyy"},
@@ -360,7 +436,7 @@ func TestNDict_Get(t *testing.T) {
 }
 
 func TestNDict_Set(t *testing.T) {
-	d := types.CreateNDict(nil)
+	d := types.NewNDict(nil)
 	t.Logf(">> input: %s", print_data(d))
 
 	validations := []map[string]any{
@@ -387,7 +463,7 @@ func TestNDict_Set(t *testing.T) {
 }
 
 func TestNDict_Del(t *testing.T) {
-	d := types.CreateNDict(NDictAlt{
+	d := types.NewNDict(NDictAlt{
 		"k1": "some value",
 		"k2": map[string]any{"1": "111", "2": true, "3": 333},
 		"k3": []int{1, 2, 3},
@@ -419,7 +495,7 @@ func TestNDict_Del(t *testing.T) {
 }
 
 func TestNDict_Update(t *testing.T) {
-	d := types.CreateNDict(NDictAlt{
+	d := types.NewNDict(NDictAlt{
 		"k1": "some value",
 		"k2": map[string]any{"1": "111", "2": true, "3": 333},
 		"k3": []int{1, 2, 3},
