@@ -16,6 +16,12 @@ var Formatter2 = &xlog.Formatter{
 	TimeFormat:   "2006-01-02 15:04:05",
 }
 
+var Formatter3 = &xlog.Formatter{
+	RecordFormat: `{"time":"{time}", "level":"{level}", "message":"{message}"}`,
+	TimeFormat:   "2006-01-02 15:04:05",
+	EscapeMsg:    true,
+}
+
 func log_messages(logger *xlog.Logger) {
 	logger.Panic("logging message type: %s", "panic")
 	logger.Fatal("logging message type: %s", "fatal")
@@ -30,24 +36,22 @@ func log_messages(logger *xlog.Logger) {
 }
 
 func main() {
-	logger := xlog.NewLogger("main")
+	logger := xlog.NewStdoutLogger("main")
 	logger.Level = xlog.DEBUG
 
 	fmt.Println("\n* with default formatter:")
 	log_messages(logger)
 
-	hnd1 := xlog.NewStdoutHandler()
-	hnd1.SetFormatter(Formatter1)
-	logger.AddHandler(hnd1)
-
-	fmt.Println("\n* with 1 handler using custom formatter:")
+	fmt.Println("\n* with custom formatter1:")
+	logger.SetFormatter(Formatter1)
 	log_messages(logger)
 
-	hnd2 := xlog.NewStdoutHandler()
-	hnd2.SetFormatter(Formatter2)
-	logger.AddHandler(hnd2)
+	fmt.Println("\n* with custom formatter2:")
+	logger.SetFormatter(Formatter2)
+	log_messages(logger)
 
-	fmt.Println("\n* logging with 2 handlers using custom formatters:")
+	fmt.Println("\n* with custom json formatter:")
+	logger.SetFormatter(Formatter3)
 	log_messages(logger)
 
 	fmt.Println()

@@ -30,7 +30,6 @@ func main() {
 
 	hnd2 := xlog.NewFileHandler(
 		filepath.Join(os.TempDir(), "foobar.log"))
-	hnd2.SetFormatter(xlog.NewStdFrmtWithSrc())
 	logger.AddHandler(hnd2)
 
 	fmt.Println("\n* logging stdout and file:", hnd2.FilePath)

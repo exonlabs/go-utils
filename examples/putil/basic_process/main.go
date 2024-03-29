@@ -70,7 +70,6 @@ func (pr *SampleProcess) handleSigQuit() {
 
 func main() {
 	logger := xlog.NewStdoutLogger("main")
-	logger.SetFormatter(xlog.NewStdFrmtWithSrc())
 
 	defer func() {
 		if r := recover(); r != nil {

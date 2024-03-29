@@ -22,7 +22,7 @@ func log_messages(logger *xlog.Logger) {
 func main() {
 	logger := xlog.NewStdoutLogger("main")
 
-	fmt.Println("\n* logging level: TRACE")
+	fmt.Println("\n* logging level: TRACE2")
 	logger.Level = xlog.TRACE2
 	log_messages(logger)
 
@@ -31,8 +31,8 @@ func main() {
 	log_messages(logger)
 
 	// adjust formatters
-	fmt.Println("\n-- logging with source formatter --")
-	logger.SetFormatter(xlog.NewStdFrmtWithSrc())
+	fmt.Println("\n-- logging without source formatter --")
+	logger.SetFormatter(xlog.SimpleFormatter())
 
 	fmt.Println("\n* logging level: ERROR")
 	logger.Level = xlog.ERROR
@@ -44,6 +44,12 @@ func main() {
 
 	fmt.Println("\n* logging level: PANIC")
 	logger.Level = xlog.PANIC
+	log_messages(logger)
+
+	// adjust formatters
+	fmt.Println("\n-- logging json formatter --")
+	logger.SetFormatter(xlog.JsonFormatter())
+	logger.Level = xlog.TRACE4
 	log_messages(logger)
 
 	fmt.Println()

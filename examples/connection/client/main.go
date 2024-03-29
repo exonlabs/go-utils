@@ -61,7 +61,6 @@ func main() {
 	fmt.Println("***** Starting Connection Client *****")
 
 	logger := xlog.NewStdoutLogger("main")
-	logger.SetFormatter(xlog.NewStdFrmtWithSrc())
 
 	cli, err := xcomm.NewConnection(*uri, logger)
 	if err != nil {

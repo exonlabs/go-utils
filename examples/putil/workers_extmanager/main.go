@@ -113,7 +113,6 @@ func CommandHandler(rm *xputil.RtManager, cmd string) (string, error) {
 
 func main() {
 	logger := xlog.NewStdoutLogger("main")
-	logger.SetFormatter(xlog.NewStdFrmtWithSrc())
 
 	defer func() {
 		if r := recover(); r != nil {

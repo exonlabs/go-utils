@@ -3,64 +3,40 @@ package xlog
 import "os"
 
 type Handler interface {
-	SetFormatter(*Formatter)
-	HandleRecord(*Record) error
+	HandleRecord(string) error
 }
 
-// /////////////////////
-
-type BaseHandler struct {
-	formatter *Formatter
-}
-
-func (h *BaseHandler) SetFormatter(f *Formatter) {
-	h.formatter = f
-}
-
-func NewBaseHandler() *BaseHandler {
-	return &BaseHandler{
-		formatter: NewStdFrmt(),
-	}
-}
-
-// ///////////////////// Write log messages to Stdout
-
+// Write log messages to Stdout
 type StdoutHandler struct {
-	*BaseHandler
 }
 
 func NewStdoutHandler() *StdoutHandler {
-	return &StdoutHandler{
-		BaseHandler: NewBaseHandler(),
-	}
+	return &StdoutHandler{}
 }
 
-func (h *StdoutHandler) HandleRecord(r *Record) error {
-	_, err := os.Stdout.WriteString(h.formatter.ParseRecord(r) + "\n")
+func (h *StdoutHandler) HandleRecord(r string) error {
+	_, err := os.Stdout.WriteString(r + "\n")
 	return err
 }
 
-// ///////////////////// Write log messages to file
-
+// Write log messages to file
 type FileHandler struct {
-	*BaseHandler
 	FilePath string
 }
 
 func NewFileHandler(path string) *FileHandler {
 	return &FileHandler{
-		BaseHandler: NewBaseHandler(),
-		FilePath:    path,
+		FilePath: path,
 	}
 }
 
-func (h *FileHandler) HandleRecord(r *Record) error {
+func (h *FileHandler) HandleRecord(r string) error {
 	fh, err := os.OpenFile(
 		h.FilePath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0664)
 	if err != nil {
 		return err
 	}
 	defer fh.Close()
-	_, err = fh.WriteString(h.formatter.ParseRecord(r) + "\n")
+	_, err = fh.WriteString(r + "\n")
 	return err
 }

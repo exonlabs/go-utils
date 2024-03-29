@@ -103,7 +103,6 @@ func (rt *Routine2) Terminate() error {
 
 func main() {
 	logger := xlog.NewStdoutLogger("main")
-	logger.SetFormatter(xlog.NewStdFrmtWithSrc())
 
 	defer func() {
 		if r := recover(); r != nil {

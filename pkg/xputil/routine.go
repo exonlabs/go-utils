@@ -29,7 +29,7 @@ func NewBaseRoutine(tsk Tasklet) *BaseRoutine {
 func (rt *BaseRoutine) Setup(name string, rm *RtManager) error {
 	rt.Name = name
 	rt.parent = rm
-	rt.Log = rm.Log.NewChildLogger(name)
+	rt.Log = rm.Log.ChildLogger(name)
 	return nil
 }
 

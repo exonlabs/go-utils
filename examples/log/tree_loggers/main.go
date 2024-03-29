@@ -6,47 +6,34 @@ import (
 	"github.com/exonlabs/go-utils/pkg/xlog"
 )
 
-func log_messages(logger *xlog.Logger) {
-	logger.Panic("logging message type: %s", "panic")
-	logger.Fatal("logging message type: %s", "fatal")
-	logger.Error("logging message type: %s", "error")
-	logger.Warn("logging message type: %s", "warn")
-	logger.Info("logging message type: %s", "info")
-	logger.Debug("logging message type: %s", "debug")
-	logger.Trace1("logging message type: %s", "trace1")
-	logger.Trace2("logging message type: %s", "trace2")
-	logger.Trace3("logging message type: %s", "trace3")
-	logger.Trace4("logging message type: %s", "trace4")
-}
-
 func main() {
 	logger := xlog.NewStdoutLogger("main")
 	logger.Level = xlog.DEBUG
-	logger.SetFormatter(xlog.NewCustomMsgFrmt(
+	logger.SetFormatter(xlog.CustomMsgFormatter(
 		"{time} {level} [{source}] -- root handler, {message}"))
 
 	fmt.Println("\n* logging parent logger:", logger.Name)
-	log_messages(logger)
+	logger.Warn("logging root message type: %s", "warn")
+	logger.Info("logging root message type: %s", "info")
 
-	log1 := logger.NewChildLogger("child1")
-	fmt.Println("\n* logging child logger:", log1.Name)
-	log_messages(log1)
+	log1 := logger.ChildLogger("child1")
+	fmt.Println("\n* logging child  logger:", log1.Name)
+	logger.Warn("logging root message type: %s", "warn")
+	log1.Warn("logging child 1 message type: %s", "warn")
+	logger.Info("logging root message type: %s", "info")
+	log1.Info("logging child 1 message type: %s", "info")
 
-	log2 := logger.NewChildLogger("child2")
+	log2 := logger.ChildLogger("child2")
 	log2.Level = xlog.WARN
-	log2.SetFormatter(xlog.NewCustomMsgFrmt(
-		"{time} {level} ({source}) ----- child2 handler, {message}"))
-	log2.AddHandler(xlog.NewStdoutHandler())
-	fmt.Println("\n* logging child logger (+handlers):", log2.Name)
-	log_messages(log2)
-
-	log21 := log2.NewChildLogger("child21")
-	log21.Level = xlog.INFO
-	log21.SetFormatter(xlog.NewCustomMsgFrmt(
-		"{time} {level} ({source}) -------- child21 handler, {message}"))
-	log21.AddHandler(xlog.NewStdoutHandler())
-	fmt.Println("\n* logging subchild logger (+handlers):", log21.Name)
-	log_messages(log21)
+	log2.SetFormatter(xlog.CustomMsgFormatter(
+		"{time} {level} ----- child2 handler, {message}"))
+	fmt.Println("\n* logging child 2 logger (+handlers):", log2.Name)
+	logger.Warn("logging root message type: %s", "warn")
+	log1.Warn("logging child 1 message type: %s", "warn")
+	log2.Warn("logging child 2 message type: %s", "warn")
+	logger.Info("logging root message type: %s", "info")
+	log1.Info("logging child 1 message type: %s", "info")
+	log2.Info("logging child 2 message type: %s", "info")
 
 	fmt.Println()
 }
