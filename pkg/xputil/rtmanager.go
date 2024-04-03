@@ -67,10 +67,14 @@ func (rm *RtManager) Execute() error {
 
 // terminate manager
 func (rm *RtManager) Terminate() error {
-	rm.rtBuffLock.Lock()
-	defer rm.rtBuffLock.Unlock()
+	defer func() {
+		if !rm.rtBuffLock.TryLock() {
+			rm.rtBuffLock.Unlock()
+		}
+	}()
 
 	rm.Log.Info("stopping all active routines")
+	rm.rtBuffLock.Lock()
 	for n := range rm.rtBuffer {
 		rm.rtBuffer[n].active = false
 		if rm.rtBuffer[n].rt.IsAlive() {
@@ -78,6 +82,8 @@ func (rm *RtManager) Terminate() error {
 			rm.rtBuffer[n].rt.Stop()
 		}
 	}
+	rm.rtBuffLock.Unlock()
+
 	// no wait required
 	if rm.TermDelay <= 0 {
 		return nil
@@ -88,23 +94,27 @@ func (rm *RtManager) Terminate() error {
 	for t := rm.TermDelay; t > 0 && !rm.IsKillEvent(); t -= tPoll {
 		rm.Sleep(tPoll)
 		chk := true
+		rm.rtBuffLock.Lock()
 		for n := range rm.rtBuffer {
 			if rm.rtBuffer[n].rt.IsAlive() {
 				chk = false
 				break
 			}
 		}
+		rm.rtBuffLock.Unlock()
 		if chk {
 			return nil
 		}
 	}
 
 	names := []string{}
+	rm.rtBuffLock.Lock()
 	for n := range rm.rtBuffer {
 		if rm.rtBuffer[n].rt.IsAlive() {
 			names = append(names, n)
 		}
 	}
+	rm.rtBuffLock.Unlock()
 	rm.Log.Error("failed stopping routines: %s", strings.Join(names, ","))
 	return nil
 }
