@@ -15,6 +15,11 @@ const (
 	defaultPollInterval = float64(0.5)
 )
 
+// command handling callback function definition
+// args: manager handler, received command
+// return: reply message and error
+type CommandHandler func(string) (string, error)
+
 // extended routine manager with management through named pipes
 // manager uses 2 pipes: 1 for input and 1 for output
 type ExtRtManager struct {
@@ -31,9 +36,7 @@ type ExtRtManager struct {
 	PollInterval float64
 
 	// command handler callback function
-	// args: manager handler, received command
-	// return: reply message and error
-	CommandHandler func(*RtManager, string) (string, error)
+	CommandHandler CommandHandler
 }
 
 func NewExtRtManager(log *xlog.Logger) *ExtRtManager {
@@ -105,14 +108,14 @@ func (rm *ExtRtManager) CheckCommand() error {
 		rm.Log.Error(err.Error())
 		return nil
 	}
-	if b == nil || len(b) == 0 {
+	if len(b) == 0 {
 		return nil
 	}
 
 	cmd := strings.TrimSpace(string(b))
 	rm.Log.Info("CMD_REQ: %s", cmd)
 
-	reply, err := rm.CommandHandler(rm.RtManager, cmd)
+	reply, err := rm.CommandHandler(cmd)
 	if err != nil {
 		rm.Log.Error(err.Error())
 		if len(reply) == 0 {

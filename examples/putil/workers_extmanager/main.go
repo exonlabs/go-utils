@@ -46,22 +46,26 @@ func (wk *Worker) Terminate() error {
 	return nil
 }
 
-func CommandHandler(rm *xputil.RtManager, cmd string) (string, error) {
+type CmdHandler struct {
+	RtMng *xputil.ExtRtManager
+}
+
+func (ch *CmdHandler) HandleCommand(cmd string) (string, error) {
 	p := strings.Split(cmd, ":")
 
 	switch strings.TrimSpace(p[0]) {
 	case "EXIT":
-		rm.Stop()
+		ch.RtMng.Stop()
 
 	case "LIST_WORKERS":
-		return strings.Join(rm.ListRoutines(), ","), nil
+		return strings.Join(ch.RtMng.ListRoutines(), ","), nil
 
 	case "ADD_WORKER":
 		if (workers.Load() - wrkIndx.Load() + 1) >= 10 {
 			return "MAX_REACHED", nil
 		}
 		wname := fmt.Sprintf("wrk%d", workers.Load()+1)
-		if err := rm.AddRoutine(wname, NewWorker(), true); err != nil {
+		if err := ch.RtMng.AddRoutine(wname, NewWorker(), true); err != nil {
 			return "FAILED", err
 		}
 		workers.Add(1)
@@ -69,7 +73,7 @@ func CommandHandler(rm *xputil.RtManager, cmd string) (string, error) {
 	case "DEL_WORKER":
 		if wrkIndx.Load() <= workers.Load() {
 			wname := fmt.Sprintf("wrk%d", wrkIndx.Load())
-			if err := rm.DelRoutine(wname); err != nil {
+			if err := ch.RtMng.DelRoutine(wname); err != nil {
 				return "FAILED", err
 			}
 			wrkIndx.Add(1)
@@ -82,7 +86,7 @@ func CommandHandler(rm *xputil.RtManager, cmd string) (string, error) {
 			return "MISSING_PARAM", nil
 		}
 		wname := fmt.Sprintf("wrk%s", strings.TrimSpace(p[1]))
-		if err := rm.StartRoutine(wname); err != nil {
+		if err := ch.RtMng.StartRoutine(wname); err != nil {
 			return "FAILED", err
 		}
 
@@ -91,7 +95,7 @@ func CommandHandler(rm *xputil.RtManager, cmd string) (string, error) {
 			return "MISSING_PARAM", nil
 		}
 		wname := fmt.Sprintf("wrk%s", strings.TrimSpace(p[1]))
-		if err := rm.StopRoutine(wname); err != nil {
+		if err := ch.RtMng.StopRoutine(wname); err != nil {
 			return "FAILED", err
 		}
 
@@ -100,7 +104,7 @@ func CommandHandler(rm *xputil.RtManager, cmd string) (string, error) {
 			return "MISSING_PARAM", nil
 		}
 		wname := fmt.Sprintf("wrk%s", strings.TrimSpace(p[1]))
-		if err := rm.RestartRoutine(wname); err != nil {
+		if err := ch.RtMng.RestartRoutine(wname); err != nil {
 			return "FAILED", err
 		}
 
@@ -120,24 +124,27 @@ func main() {
 			indx := bytes.Index(stack, []byte("panic({"))
 			logger.Panic("%s", r)
 			logger.Trace1("\n-------------\n%s-------------", stack[indx:])
-			logger.Warn("exit ... due to last error")
+			os.Exit(1)
 		} else {
 			logger.Info("exit")
+			os.Exit(0)
 		}
 	}()
 
-	debugOpt := flag.Int("x", 0, "set debug modes, (default: 0)")
+	debug := flag.Int("x", 0, "set debug modes, (default: 0)")
 	flag.Parse()
 
-	if *debugOpt > 0 {
-		switch *debugOpt {
-		case 1:
-			logger.Level = xlog.DEBUG
-		case 2:
-			logger.Level = xlog.TRACE1
-		default:
-			logger.Level = xlog.TRACE2
-		}
+	switch {
+	case *debug >= 5:
+		logger.Level = xlog.TRACE4
+	case *debug >= 4:
+		logger.Level = xlog.TRACE3
+	case *debug >= 3:
+		logger.Level = xlog.TRACE2
+	case *debug >= 2:
+		logger.Level = xlog.TRACE1
+	case *debug >= 1:
+		logger.Level = xlog.DEBUG
 	}
 
 	logger.Info("**** starting ****")
@@ -156,7 +163,9 @@ func main() {
 	rm := xputil.NewExtRtManager(logger)
 	rm.ProcTitle = "WrkManager"
 	rm.PipeDir = tmpPath
-	rm.CommandHandler = CommandHandler
+
+	cmdhnd := &CmdHandler{RtMng: rm}
+	rm.CommandHandler = cmdhnd.HandleCommand
 
 	for i := int32(1); i <= workers.Load(); i++ {
 		wname := fmt.Sprintf("wrk%d", i)

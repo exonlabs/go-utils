@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"flag"
+	"os"
 	"runtime/debug"
 	"syscall"
 
@@ -77,24 +78,27 @@ func main() {
 			indx := bytes.Index(stack, []byte("panic({"))
 			logger.Panic("%s", r)
 			logger.Trace1("\n-------------\n%s-------------", stack[indx:])
-			logger.Warn("exit ... due to last error")
+			os.Exit(1)
 		} else {
 			logger.Info("exit")
+			os.Exit(0)
 		}
 	}()
 
-	debugOpt := flag.Int("x", 0, "set debug modes, (default: 0)")
+	debug := flag.Int("x", 0, "set debug modes, (default: 0)")
 	flag.Parse()
 
-	if *debugOpt > 0 {
-		switch *debugOpt {
-		case 1:
-			logger.Level = xlog.DEBUG
-		case 2:
-			logger.Level = xlog.TRACE1
-		default:
-			logger.Level = xlog.TRACE2
-		}
+	switch {
+	case *debug >= 5:
+		logger.Level = xlog.TRACE4
+	case *debug >= 4:
+		logger.Level = xlog.TRACE3
+	case *debug >= 3:
+		logger.Level = xlog.TRACE2
+	case *debug >= 2:
+		logger.Level = xlog.TRACE1
+	case *debug >= 1:
+		logger.Level = xlog.DEBUG
 	}
 
 	logger.Info("**** starting ****")
