@@ -1,6 +1,8 @@
 package types
 
 import (
+	"bytes"
+	"encoding/gob"
 	"slices"
 	"strings"
 )
@@ -18,6 +20,9 @@ func NewNDict(buff map[string]any) NDict {
 	if buff == nil {
 		return NDict{}
 	}
+	// delete empty keys
+	delete(buff, "")
+	// recursive conversion
 	for key, value := range buff {
 		switch val := value.(type) {
 		case map[string]any:
@@ -58,15 +63,6 @@ func NewNDict(buff map[string]any) NDict {
 		}
 	}
 	return NDict(buff)
-}
-
-// create new []NDict from initial []map data
-func NewNDictSlice(buff []map[string]any) []NDict {
-	res := []NDict{}
-	for _, v := range buff {
-		res = append(res, NewNDict(v))
-	}
-	return res
 }
 
 // recursive convert NDict into standard map data
@@ -120,16 +116,21 @@ func StripNDict(buff map[string]any) map[string]any {
 	return buff
 }
 
-// recursive convert []NDict into standard []map data
-func StripNDictSlice(buff []NDict) []map[string]any {
-	res := []map[string]any{}
-	if buff == nil {
-		return res
+// create deep clone of NDict
+func CloneNDict(src map[string]any) (NDict, error) {
+	gob.Register(Dict{})
+	gob.Register([]Dict{})
+	gob.Register(NDict{})
+	gob.Register([]NDict{})
+	var b bytes.Buffer
+	if err := gob.NewEncoder(&b).Encode(src); err != nil {
+		return nil, err
 	}
-	for _, v := range buff {
-		res = append(res, StripNDict(v))
+	var dst Dict
+	if err := gob.NewDecoder(&b).Decode(&dst); err != nil {
+		return nil, err
 	}
-	return res
+	return NewNDict(dst), nil
 }
 
 // return list up to N level nested _keys
@@ -407,31 +408,35 @@ func (d NDict) GetFloat64Slice(key string, defval []float64) []float64 {
 
 // set value in dict by key
 func (d NDict) Set(key string, newval any) {
-	k0, kn, next := strings.Cut(key, sepNDict)
-	// not nested key
-	if !next {
-		d[k0] = newval
-	} else {
-		// 1st level key not exist or not of type Dict
-		if _, ok := d[k0].(NDict); !ok {
-			d[k0] = NDict{}
+	if len(key) != 0 {
+		k0, kn, next := strings.Cut(key, sepNDict)
+		// not nested key
+		if !next {
+			d[k0] = newval
+		} else {
+			// 1st level key not exist or not of type Dict
+			if _, ok := d[k0].(NDict); !ok {
+				d[k0] = NDict{}
+			}
+			d[k0].(NDict).Set(kn, newval)
 		}
-		d[k0].(NDict).Set(kn, newval)
 	}
 }
 
 // delete value from dict by key
 func (d NDict) Del(key string) {
-	k0, kn, next := strings.Cut(key, sepNDict)
-	if val, ok := d[k0]; ok {
-		// not nested key
-		if !next {
-			delete(d, k0)
-			return
-		}
-		// value is of type Dict
-		if v, ok := val.(NDict); ok {
-			v.Del(kn)
+	if len(key) != 0 {
+		k0, kn, next := strings.Cut(key, sepNDict)
+		if val, ok := d[k0]; ok {
+			// not nested key
+			if !next {
+				delete(d, k0)
+				return
+			}
+			// value is of type Dict
+			if v, ok := val.(NDict); ok {
+				v.Del(kn)
+			}
 		}
 	}
 }
@@ -439,7 +444,9 @@ func (d NDict) Del(key string) {
 // update dict from updt dict
 func (d NDict) Update(updt map[string]any) {
 	buff := NewNDict(updt)
-	for _, k := range buff.Keys() {
-		d.Set(k, buff.Get(k, nil))
+	for _, key := range buff.Keys() {
+		if len(key) != 0 {
+			d.Set(key, buff.Get(key, nil))
+		}
 	}
 }

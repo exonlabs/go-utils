@@ -1,25 +1,130 @@
 package types
 
-import "slices"
+import (
+	"bytes"
+	"encoding/gob"
+	"slices"
+)
 
 // Simple Dict type
 type Dict map[string]any
 
-// create new Dict type from initial map data
+// create new Dict from initial map data
 func NewDict(buff map[string]any) Dict {
 	if buff == nil {
 		return Dict{}
 	}
+	// delete empty keys
+	delete(buff, "")
+	// recursive conversion
+	for key, value := range buff {
+		switch val := value.(type) {
+		case map[string]any:
+			buff[key] = NewDict(val)
+		case Dict:
+			buff[key] = NewDict(val)
+		case NDict:
+			buff[key] = NewDict(val)
+		case []map[string]any:
+			b := []Dict{}
+			for _, v := range val {
+				b = append(b, NewDict(v))
+			}
+			buff[key] = b
+		case []Dict:
+			b := []Dict{}
+			for _, v := range val {
+				b = append(b, NewDict(v))
+			}
+			buff[key] = b
+		case []NDict:
+			b := []Dict{}
+			for _, v := range val {
+				b = append(b, NewDict(v))
+			}
+			buff[key] = b
+		case []any:
+			b := []any{}
+			for _, v := range val {
+				switch v.(type) {
+				case map[string]any, Dict, NDict:
+					b = append(b, NewDict(v.(map[string]any)))
+				default:
+					b = append(b, v)
+				}
+			}
+			buff[key] = b
+		}
+	}
 	return Dict(buff)
 }
 
-// create new []Dict type from initial []map data
-func NewDictSlice(buff []map[string]any) []Dict {
-	res := []Dict{}
-	for _, v := range buff {
-		res = append(res, NewDict(v))
+// recursive convert Dict into standard map data
+func StripDict(buff map[string]any) map[string]any {
+	if buff == nil {
+		return map[string]any{}
 	}
-	return res
+	for key, value := range buff {
+		switch val := value.(type) {
+		case map[string]any:
+			buff[key] = StripDict(val)
+		case Dict:
+			buff[key] = StripDict(val)
+		case NDict:
+			buff[key] = StripDict(val)
+		case []map[string]any:
+			b := []map[string]any{}
+			for _, v := range val {
+				b = append(b, StripDict(v))
+			}
+			buff[key] = b
+		case []Dict:
+			b := []map[string]any{}
+			for _, v := range val {
+				b = append(b, StripDict(v))
+			}
+			buff[key] = b
+		case []NDict:
+			b := []map[string]any{}
+			for _, v := range val {
+				b = append(b, StripDict(v))
+			}
+			buff[key] = b
+		case []any:
+			b := []any{}
+			for _, sv := range val {
+				switch v := sv.(type) {
+				case map[string]any:
+					b = append(b, StripDict(v))
+				case Dict:
+					b = append(b, StripDict(v))
+				case NDict:
+					b = append(b, StripDict(v))
+				default:
+					b = append(b, v)
+				}
+			}
+			buff[key] = b
+		}
+	}
+	return buff
+}
+
+// create deep clone of Dict
+func CloneDict(src map[string]any) (Dict, error) {
+	gob.Register(Dict{})
+	gob.Register([]Dict{})
+	gob.Register(NDict{})
+	gob.Register([]NDict{})
+	var b bytes.Buffer
+	if err := gob.NewEncoder(&b).Encode(src); err != nil {
+		return nil, err
+	}
+	var dst Dict
+	if err := gob.NewDecoder(&b).Decode(&dst); err != nil {
+		return nil, err
+	}
+	return NewDict(dst), nil
 }
 
 // return sorted list of all keys
@@ -256,17 +361,23 @@ func (d Dict) GetFloat64Slice(key string, defval []float64) []float64 {
 
 // set value in dict by key
 func (d Dict) Set(key string, newval any) {
-	d[key] = newval
+	if len(key) != 0 {
+		d[key] = newval
+	}
 }
 
 // delete value from dict by key
 func (d Dict) Del(key string) {
-	delete(d, key)
+	if len(key) != 0 {
+		delete(d, key)
+	}
 }
 
 // update dict from map data
 func (d Dict) Update(updt map[string]any) {
 	for key, val := range updt {
-		d[key] = val
+		if len(key) != 0 {
+			d[key] = val
+		}
 	}
 }

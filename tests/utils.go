@@ -28,3 +28,8 @@ func RevCopy[S ~[]T, T any](s S) S {
 	slices.Reverse(b)
 	return b
 }
+
+func PrintData(d any) string {
+	return fmt.Sprintf(
+		"\n%#v\n-----------------------------------------------", d)
+}
