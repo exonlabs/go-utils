@@ -22,7 +22,7 @@ type BaseRoutine struct {
 
 func NewBaseRoutine(tsk Tasklet) *BaseRoutine {
 	return &BaseRoutine{
-		BaseTasklet: NewTaskletManager(nil, tsk),
+		BaseTasklet: NewBaseTasklet(nil, tsk),
 	}
 }
 

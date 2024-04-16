@@ -9,11 +9,6 @@ import (
 	"github.com/exonlabs/go-utils/pkg/xlog"
 )
 
-const (
-	defaultMonInterval = float64(5)
-	defaultTermDelay   = float64(3)
-)
-
 var (
 	ErrRtError          = errors.New("")
 	ErrNoRoutines       = fmt.Errorf("%wno routines loaded", ErrRtError)
@@ -41,8 +36,8 @@ type RtManager struct {
 func NewRtManager(log *xlog.Logger) *RtManager {
 	rm := &RtManager{
 		rtBuffer:    make(map[string]*rtInfo),
-		MonInterval: defaultMonInterval,
-		TermDelay:   defaultTermDelay,
+		MonInterval: float64(2),
+		TermDelay:   float64(3),
 	}
 	rm.BaseProcess = NewBaseProcess(log, rm)
 	return rm
@@ -115,7 +110,8 @@ func (rm *RtManager) Terminate() error {
 		}
 	}
 	rm.rtBuffLock.Unlock()
-	rm.Log.Error("failed stopping routines: %s", strings.Join(names, ","))
+	rm.Log.Error(
+		"failed stopping routines: %s", strings.Join(names, ","))
 	return nil
 }
 
@@ -132,7 +128,8 @@ func (rm *RtManager) ListRoutines() []string {
 }
 
 // add new routine handler to manager
-func (rm *RtManager) AddRoutine(name string, rt Routine, active bool) error {
+func (rm *RtManager) AddRoutine(
+	name string, rt Routine, active bool) error {
 	rm.rtBuffLock.Lock()
 	defer rm.rtBuffLock.Unlock()
 

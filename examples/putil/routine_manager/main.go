@@ -110,7 +110,7 @@ func main() {
 			stack := debug.Stack()
 			indx := bytes.Index(stack, []byte("panic({"))
 			logger.Panic("%s", r)
-			logger.Trace1("\n-------------\n%s-------------", stack[indx:])
+			logger.Trace1("\n----------\n%s----------", stack[indx:])
 			os.Exit(1)
 		} else {
 			logger.Info("exit")

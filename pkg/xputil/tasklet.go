@@ -1,12 +1,11 @@
 package xputil
 
 import (
+	"bytes"
+	"runtime/debug"
+
 	"github.com/exonlabs/go-utils/pkg/sync/xevent"
 	"github.com/exonlabs/go-utils/pkg/xlog"
-)
-
-const (
-	defaultErrorDelay = float64(1)
 )
 
 type Tasklet interface {
@@ -25,47 +24,50 @@ type BaseTasklet struct {
 	ErrorDelay float64
 }
 
-func NewTaskletManager(log *xlog.Logger, tsk Tasklet) *BaseTasklet {
+func NewBaseTasklet(log *xlog.Logger, tsk Tasklet) *BaseTasklet {
 	return &BaseTasklet{
 		Log:        log,
 		tasklet:    tsk,
 		evtTerm:    xevent.NewEvent(),
 		evtKill:    xevent.NewEvent(),
-		ErrorDelay: defaultErrorDelay,
+		ErrorDelay: float64(1),
 	}
 }
 
+// check if terminate event is set
 func (tl *BaseTasklet) IsTermEvent() bool {
 	return tl.evtTerm.IsSet()
 }
 
+// check if kill event is set
 func (tl *BaseTasklet) IsKillEvent() bool {
 	return tl.evtKill.IsSet()
 }
 
+// start tasklet execution
 func (tl *BaseTasklet) Start() {
 	tl.evtTerm.Clear()
 	tl.evtKill.Clear()
 
 	// initialize
-	if err := tl.tasklet.Initialize(); err != nil {
-		tl.Log.Fatal("initialize failed, %s", err.Error())
+	if !tl.SafeExecute(tl.tasklet.Initialize) {
 		return
 	}
 
 	// execute operation loop forever till term event
 	for !tl.evtTerm.IsSet() {
-		if !tl.safeExec(tl.tasklet.Execute) {
+		if !tl.SafeExecute(tl.tasklet.Execute) {
 			tl.Sleep(tl.ErrorDelay)
 		}
 	}
 
 	// graceful terminate
 	if !tl.evtKill.IsSet() {
-		tl.safeExec(tl.tasklet.Terminate)
+		tl.SafeExecute(tl.tasklet.Terminate)
 	}
 }
 
+// terminate then kill tasklet execution
 func (tl *BaseTasklet) Stop() {
 	if tl.evtTerm.IsSet() {
 		tl.evtKill.Set()
@@ -74,11 +76,13 @@ func (tl *BaseTasklet) Stop() {
 	}
 }
 
+// kill tasklet execution
 func (tl *BaseTasklet) Kill() {
 	tl.evtKill.Set()
 	tl.evtTerm.Set()
 }
 
+// non-blocking sleep
 func (tl *BaseTasklet) Sleep(timeout float64) bool {
 	if tl.evtTerm.IsSet() {
 		return tl.evtKill.Wait(timeout)
@@ -88,13 +92,16 @@ func (tl *BaseTasklet) Sleep(timeout float64) bool {
 }
 
 // run function with error and panic handling
-func (tl *BaseTasklet) safeExec(f func() error) bool {
-	err, trace := PanicExcept(f)
-	if trace != "" {
-		tl.Log.Panic(err.Error())
-		tl.Log.Trace1("\n-------------\n%s-------------", trace)
-		return false
-	} else if err != nil {
+func (tl *BaseTasklet) SafeExecute(f func() error) bool {
+	defer func() {
+		if r := recover(); r != nil {
+			stack := debug.Stack()
+			indx := bytes.Index(stack, []byte("panic({"))
+			tl.Log.Panic("%s", r)
+			tl.Log.Trace1("\n----------\n%s----------", stack[indx:])
+		}
+	}()
+	if err := f(); err != nil {
 		tl.Log.Error(err.Error())
 		return false
 	}
