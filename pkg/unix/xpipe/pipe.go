@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -12,20 +13,19 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+const (
+	DEFAULT_POLLINTERVAL  = float64(0.1)
+	DEFAULT_POLLCHUNKSIZE = int(1024)
+	DEFAULT_RWTIMEOUT     = float64(0)
+)
+
 var (
 	ErrError   = errors.New("")
 	ErrOpen    = fmt.Errorf("%wopen pipe failed", ErrError)
-	ErrClosed  = fmt.Errorf("%wpipe closed", ErrError)
 	ErrBreak   = fmt.Errorf("%woperation break", ErrError)
 	ErrTimeout = fmt.Errorf("%woperation timeout", ErrError)
 	ErrRead    = fmt.Errorf("%wread pipe failed", ErrError)
 	ErrWrite   = fmt.Errorf("%wwrite pipe failed", ErrError)
-)
-
-const (
-	defaultPollInterval  = float64(0.1)
-	defaultPollChunkSize = int(4096)
-	defaultPollMaxSize   = int(0)
 )
 
 type Pipe struct {
@@ -33,42 +33,31 @@ type Pipe struct {
 	filePath string
 	evtBreak *xevent.Event
 
-	// read/write polling params
+	// read/write params
 	PollInterval  float64
 	PollChunkSize int
-	PollMaxSize   int
+	ReadTimeout   float64
+	WriteTimeout  float64
 }
 
 func NewPipe(path string) *Pipe {
 	return &Pipe{
-		filePath:      path,
+		filePath:      filepath.Clean(path),
 		evtBreak:      xevent.NewEvent(),
-		PollInterval:  defaultPollInterval,
-		PollChunkSize: defaultPollChunkSize,
-		PollMaxSize:   defaultPollMaxSize,
+		PollInterval:  DEFAULT_POLLINTERVAL,
+		PollChunkSize: DEFAULT_POLLCHUNKSIZE,
+		ReadTimeout:   DEFAULT_RWTIMEOUT,
+		WriteTimeout:  DEFAULT_RWTIMEOUT,
 	}
 }
 
-// create new pipe dev-file on system, removes previous file if exist
-func (p *Pipe) Create(perm uint32) error {
-	os.Remove(p.filePath)
-	if err := syscall.Mkfifo(p.filePath, perm); err != nil {
-		return fmt.Errorf("%w%s", ErrError, err.Error())
-	}
-	return nil
-}
-
-// removes pipe dev-file from system
-func (p *Pipe) Delete() error {
-	err := os.Remove(p.filePath)
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("%w%s", ErrError, err.Error())
-	}
-	return nil
+// return pipe file path
+func (p *Pipe) Path() string {
+	return p.filePath
 }
 
 // open file connection handler on pipe
-func (p *Pipe) Open(mode int) error {
+func (p *Pipe) open(mode int) error {
 	if p.fd == nil {
 		var err error
 		p.fd, err = os.OpenFile(p.filePath, mode, os.ModeNamedPipe)
@@ -80,21 +69,21 @@ func (p *Pipe) Open(mode int) error {
 }
 
 // open pipe for reading in non-blocking mode
-func (p *Pipe) OpenRead() error {
-	return p.Open(os.O_RDONLY | unix.O_NONBLOCK)
+func (p *Pipe) open_read() error {
+	return p.open(os.O_RDONLY | unix.O_NONBLOCK)
 }
 
 // open pipe for writing in non-blocking mode
-func (p *Pipe) OpenWrite() error {
-	return p.Open(os.O_WRONLY | unix.O_NONBLOCK)
+func (p *Pipe) open_write() error {
+	return p.open(os.O_WRONLY | unix.O_NONBLOCK)
 }
 
 // close file connection handler on pipe
-func (p *Pipe) Close() {
+func (p *Pipe) close() {
 	if p.fd != nil {
 		p.fd.Close()
-		p.fd = nil
 	}
+	p.fd = nil
 }
 
 // cancel active read/write operation on pipe
@@ -102,10 +91,13 @@ func (p *Pipe) Cancel() {
 	p.evtBreak.Set()
 }
 
-// read from pipe
+// non-blocking read from pipe
 func (p *Pipe) Read() ([]byte, error) {
 	if p.fd == nil {
-		return nil, ErrClosed
+		if err := p.open_read(); err == nil {
+			return nil, err
+		}
+		defer p.close()
 	}
 	data := []byte(nil)
 	for {
@@ -130,12 +122,15 @@ func (p *Pipe) Read() ([]byte, error) {
 // use timeout=0 to wait forever (blocking mode)
 func (p *Pipe) ReadWait(timeout float64) ([]byte, error) {
 	if p.fd == nil {
-		defer p.Close()
+		defer p.close()
+	}
+	if timeout < 0 {
+		timeout = p.ReadTimeout
 	}
 	p.evtBreak.Clear()
 	tbreak := float64(time.Now().Unix()) + timeout
 	for {
-		if err := p.OpenRead(); err == nil {
+		if err := p.open_read(); err == nil {
 			if data, err := p.Read(); err == nil {
 				return data, nil
 			}
@@ -149,10 +144,13 @@ func (p *Pipe) ReadWait(timeout float64) ([]byte, error) {
 	}
 }
 
-// write to pipe
+// non-blocking write to pipe
 func (p *Pipe) Write(data []byte) error {
 	if p.fd == nil {
-		return ErrClosed
+		if err := p.open_write(); err == nil {
+			return err
+		}
+		defer p.close()
 	}
 	if _, err := p.fd.Write(data); err != nil {
 		return fmt.Errorf("%w, %s", ErrWrite, err.Error())
@@ -164,12 +162,15 @@ func (p *Pipe) Write(data []byte) error {
 // use timeout=0 to wait forever (blocking mode)
 func (p *Pipe) WriteWait(data []byte, timeout float64) error {
 	if p.fd == nil {
-		defer p.Close()
+		defer p.close()
+	}
+	if timeout < 0 {
+		timeout = p.WriteTimeout
 	}
 	p.evtBreak.Clear()
 	tbreak := float64(time.Now().Unix()) + timeout
 	for {
-		if err := p.OpenWrite(); err == nil {
+		if err := p.open_write(); err == nil {
 			return p.Write(data)
 		}
 		if !p.evtBreak.Wait(p.PollInterval) {
@@ -179,4 +180,36 @@ func (p *Pipe) WriteWait(data []byte, timeout float64) error {
 			return ErrTimeout
 		}
 	}
+}
+
+///////////////////////////////////// utils functions
+
+// create new pipe on system, if not exist
+func CreatePipe(path string, perm uint32) error {
+	path = filepath.Clean(path)
+	if path == string(filepath.Separator) || path == filepath.Dir(path) {
+		return fmt.Errorf("%winvalid pipe path", ErrError)
+	}
+	_, err := os.Stat(path)
+	if os.IsNotExist(err) {
+		if err := syscall.Mkfifo(path, perm); err != nil {
+			return fmt.Errorf("%w%s", ErrError, err.Error())
+		}
+	} else if err != nil {
+		return fmt.Errorf("%w%s", ErrError, err.Error())
+	}
+	return nil
+}
+
+// delete pipe file from system
+func DeletePipe(path string) error {
+	path = filepath.Clean(path)
+	if path == string(filepath.Separator) || path == filepath.Dir(path) {
+		return fmt.Errorf("%winvalid pipe path", ErrError)
+	}
+	err := os.Remove(path)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("%w%s", ErrError, err.Error())
+	}
+	return nil
 }

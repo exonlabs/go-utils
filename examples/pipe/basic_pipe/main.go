@@ -13,68 +13,69 @@ import (
 	"github.com/exonlabs/go-utils/pkg/unix/xpipe"
 )
 
-var wg sync.WaitGroup
+var (
+	tmp_path  = filepath.Join(os.TempDir(), "foobar")
+	pipe_file = filepath.Join(tmp_path, "foo.pipe")
+)
 
-func SenderPrint(msg string, args ...any) {
+func sender_print(msg string, args ...any) {
+	fmt.Printf(msg+"\n", args...)
+}
+
+func receiver_print(msg string, args ...any) {
 	fmt.Printf("                         "+msg+"\n", args...)
 }
 
 func CheckPeerPipe(path string, timeout float64) {
-	SenderPrint("-- starting sender")
+	sender_print("-- starting sender")
 	p := xpipe.NewPipe(path)
+	defer sender_print("-- stop sender")
+
 	msg := "HELLO"
-	SenderPrint("<< sending: " + msg)
 	if err := p.WriteWait([]byte(msg), timeout); err == nil {
-		SenderPrint("-- CONNECTED")
+		sender_print("-- CONNECTED")
+		sender_print("-- sending >> " + msg)
 	} else if errors.Is(err, xpipe.ErrTimeout) {
-		SenderPrint("-- TIMEOUT: no peer connected")
+		sender_print("-- TIMEOUT: no peer connected")
 	} else {
-		SenderPrint("-- FAILED: %s", err.Error())
+		sender_print("-- FAILED: %s", err.Error())
 	}
 }
 
 func StartInputPipe(path string, timeout float64) {
-	fmt.Printf("open input pipe\n")
+	receiver_print("-- starting receiver")
 	p := xpipe.NewPipe(path)
-	if err := p.Create(0o666); err != nil {
-		fmt.Println(err.Error())
-		return
-	}
-	defer p.Delete()
+	defer receiver_print("-- stop receiver")
 
 	b, err := p.ReadWait(timeout)
 	if err != nil {
-		fmt.Println(err.Error())
+		receiver_print("-- %s", err.Error())
 		return
 	}
-	fmt.Printf(">> received: %s\n", b)
+	receiver_print("-- received << %s", b)
 }
 
 func SendingMsgs(path string, timeout float64) {
-	SenderPrint("-- starting message sender")
+	sender_print("-- starting sender")
 	p := xpipe.NewPipe(path)
+	defer sender_print("-- stop sender")
+
 	for i := 1; i <= 5; i++ {
 		msg := fmt.Sprintf("MESSAGE_%d", i)
-		SenderPrint("<< sending: " + msg)
-		if err := p.WriteWait([]byte(msg), timeout); err == nil {
-			SenderPrint("-- DONE")
-		} else {
-			SenderPrint("-- FAILED: %s", err.Error())
+		sender_print("-- sending >> " + msg)
+		if err := p.WriteWait([]byte(msg), timeout); err != nil {
+			sender_print("-- FAILED: %s", err.Error())
 		}
 		time.Sleep(time.Millisecond * 500)
 	}
-	SenderPrint("-- finished sending")
 }
 
 func StartCmdHandler(path string, timeout float64) {
-	fmt.Printf("open input pipe\n")
+	receiver_print("-- starting receiver")
 	p := xpipe.NewPipe(path)
-	if err := p.Create(0o666); err != nil {
-		fmt.Println(err.Error())
-		return
-	}
-	defer p.Delete()
+	defer receiver_print("-- stop receiver")
 
+	var wg sync.WaitGroup
 	evtClose := xevent.NewEvent()
 
 	wg.Add(1)
@@ -83,9 +84,9 @@ func StartCmdHandler(path string, timeout float64) {
 		for !evtClose.IsSet() {
 			b, err := p.ReadWait(timeout)
 			if err == nil {
-				fmt.Printf(">> received: %s\n", b)
+				receiver_print("-- received << %s", b)
 			} else if !errors.Is(err, xpipe.ErrBreak) {
-				fmt.Println(err.Error())
+				receiver_print("-- %s", err.Error())
 			}
 		}
 	}()
@@ -99,28 +100,30 @@ func StartCmdHandler(path string, timeout float64) {
 func main() {
 	fmt.Printf("\n**** starting ****\n")
 
-	tmpPath := filepath.Join(os.TempDir(), "foobar")
-	pipeFile := filepath.Join(tmpPath, "foo.pipe")
-
-	fmt.Printf("\nUsing Pipe: %s\n", pipeFile)
+	fmt.Printf("\nUsing Pipe: %s\n", pipe_file)
 
 	syscall.Umask(0)
-	os.RemoveAll(tmpPath)
-	os.MkdirAll(tmpPath, 0o777)
-	defer os.RemoveAll(tmpPath)
+	os.MkdirAll(tmp_path, 0o775)
+	defer os.RemoveAll(tmp_path)
+
+	if err := xpipe.CreatePipe(pipe_file, 0o666); err != nil {
+		fmt.Println(err.Error())
+		return
+	}
+	defer xpipe.DeletePipe(pipe_file)
 
 	// check without peer
-	fmt.Printf("\n* checking with no peer:\n")
-	CheckPeerPipe(pipeFile, 2)
+	fmt.Printf("\n\n* checking with no peer:\n")
+	CheckPeerPipe(pipe_file, 2)
 
 	// check with peer
-	fmt.Printf("\n* checking with peer:\n")
-	go CheckPeerPipe(pipeFile, 2)
-	StartInputPipe(pipeFile, 5)
+	fmt.Printf("\n\n* checking with peer:\n")
+	go CheckPeerPipe(pipe_file, 2)
+	StartInputPipe(pipe_file, 5)
 
 	// start read handler
-	fmt.Printf("\nrunning command handler:\n")
-	StartCmdHandler(pipeFile, 5)
+	fmt.Printf("\n\n* running command handler:\n")
+	StartCmdHandler(pipe_file, 5)
 
 	fmt.Printf("\n**** exit ****\n\n")
 }
