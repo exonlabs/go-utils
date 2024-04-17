@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/exonlabs/go-utils/pkg/crypto/xcipher"
 	"github.com/exonlabs/go-utils/pkg/types"
@@ -29,20 +30,26 @@ type fileConfig struct {
 }
 
 // create new json config file handler
-func newFileConfig(filepath string, defaults map[string]any) *fileConfig {
+func newFileConfig(path string, defaults map[string]any) *fileConfig {
 	return &fileConfig{
 		Buffer:   types.NewNDict(defaults),
-		filepath: filepath,
+		filepath: filepath.Clean(path),
 	}
 }
 
 // enable config file backup support
-func (cfg *fileConfig) EnableBackup(bakpath string) {
+func (cfg *fileConfig) EnableBackup(bakpath string) error {
 	if bakpath != "" {
+		bakpath = filepath.Clean(bakpath)
+		if bakpath == string(filepath.Separator) ||
+			bakpath == filepath.Dir(bakpath) {
+			return fmt.Errorf("invalid config backup path")
+		}
 		cfg.bakpath = bakpath
 	} else {
 		cfg.bakpath = cfg.filepath + ".backup"
 	}
+	return nil
 }
 
 // reset local buffer
@@ -68,6 +75,11 @@ func (cfg *fileConfig) IsBackupExist() bool {
 // read raw bytes content of config file, if error: then check and
 // read the backup file if backup support enabled.
 func (cfg *fileConfig) Load() error {
+	if cfg.filepath == string(filepath.Separator) ||
+		cfg.filepath == filepath.Dir(cfg.filepath) {
+		return fmt.Errorf("invalid config file path")
+	}
+
 	var b []byte
 	var err error
 	if cfg.IsExist() {
@@ -95,6 +107,11 @@ func (cfg *fileConfig) Load() error {
 // write raw bytes content to config file, if not error: then check and
 // write backup config if backup support enabled.
 func (cfg *fileConfig) Save() error {
+	if cfg.filepath == string(filepath.Separator) ||
+		cfg.filepath == filepath.Dir(cfg.filepath) {
+		return fmt.Errorf("invalid config file path")
+	}
+
 	b, err := cfg.dumper()
 	if err != nil {
 		return err
@@ -114,6 +131,10 @@ func (cfg *fileConfig) saveBackup(b []byte) error {
 
 // delete config and backup files from disk and reset local buffer
 func (cfg *fileConfig) Purge() error {
+	if cfg.filepath == string(filepath.Separator) ||
+		cfg.filepath == filepath.Dir(cfg.filepath) {
+		return fmt.Errorf("invalid config file path")
+	}
 	cfg.Reset()
 	if cfg.IsBackupExist() {
 		os.Remove(cfg.bakpath)
