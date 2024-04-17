@@ -8,21 +8,39 @@ import (
 )
 
 func CopyFile(src, dst string) error {
-	srcInfo, err := os.Stat(src)
-	if err != nil {
-		return err
+	// check src path and file
+	src = filepath.Clean(src)
+	if src == string(filepath.Separator) || src == filepath.Dir(src) {
+		return errors.New("invalid src path")
 	}
-	if srcInfo.IsDir() {
+	srcInfo, err := os.Stat(src)
+	if err != nil || srcInfo.IsDir() {
 		return errors.New("invalid src path")
 	}
 
+	// check dst path
+	dst = filepath.Clean(dst)
+	if dst == string(filepath.Separator) || dst == filepath.Dir(dst) {
+		return errors.New("invalid dst path")
+	} else if dst == src {
+		return errors.New("same src and dst paths")
+	}
+	dstInfo, err := os.Stat(src)
+	if err != nil || dstInfo.IsDir() {
+		return errors.New("invalid dst path")
+	}
+	if err := os.Remove(dst); err != nil {
+		return err
+	}
+
+	// open src file
 	srcFile, err := os.Open(src)
 	if err != nil {
 		return err
 	}
 	defer srcFile.Close()
 
-	os.Remove(dst)
+	// open dst file
 	dstFile, err := os.OpenFile(
 		dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, srcInfo.Mode())
 	if err != nil {
@@ -30,6 +48,7 @@ func CopyFile(src, dst string) error {
 	}
 	defer dstFile.Close()
 
+	// do copy
 	if _, err := io.Copy(dstFile, srcFile); err != nil {
 		return err
 	}
@@ -37,9 +56,22 @@ func CopyFile(src, dst string) error {
 }
 
 func CopyDir(src, dst string) error {
+	// check src path and file
+	src = filepath.Clean(src)
+	if src == string(filepath.Separator) || src == filepath.Dir(src) {
+		return errors.New("invalid src path")
+	}
 	srcInfo, err := os.Stat(src)
 	if err != nil {
-		return err
+		return errors.New("invalid src path")
+	}
+
+	// check dst path
+	dst = filepath.Clean(dst)
+	if dst == string(filepath.Separator) || dst == filepath.Dir(dst) {
+		return errors.New("invalid dst path")
+	} else if dst == src {
+		return errors.New("same src and dst paths")
 	}
 
 	// Create the destination directory if it doesn't exist
@@ -70,6 +102,5 @@ func CopyDir(src, dst string) error {
 			}
 		}
 	}
-
 	return nil
 }
