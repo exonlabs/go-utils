@@ -7,15 +7,19 @@ import (
 	"strings"
 
 	"github.com/exonlabs/go-utils/pkg/sync/xevent"
+	"github.com/exonlabs/go-utils/pkg/types"
 	"github.com/exonlabs/go-utils/pkg/xlog"
 )
 
 const (
-	defaultErrorDelay    = float64(1)
-	defaultPollInterval  = float64(0.005)
-	defaultPollChunkSize = int(4096)
-	defaultPollMaxSize   = int(0)
+	DEFAULT_ERRORDELAY    = float64(1)
+	DEFAULT_POLLINTERVAL  = float64(0.005)
+	DEFAULT_POLLCHUNKSIZE = int(4096)
+	DEFAULT_POLLMAXSIZE   = int(0)
 )
+
+type Options = types.NDict
+type Logger = xlog.Logger
 
 // interface representing connection
 type Connection interface {
@@ -45,7 +49,7 @@ type Listener interface {
 
 // BaseConnection is a base structure for connection handling
 type BaseConnection struct {
-	Log        *xlog.Logger
+	Log        *Logger
 	uri        string
 	uriLogging bool
 
@@ -63,16 +67,16 @@ type BaseConnection struct {
 	PollMaxSize   int
 }
 
-func newBaseConnection(uri string, log *xlog.Logger) *BaseConnection {
+func newBaseConnection(uri string, opts Options, log *Logger) *BaseConnection {
 	return &BaseConnection{
 		uri:           strings.TrimSpace(strings.ToLower(uri)),
 		Log:           log,
 		evtBreak:      xevent.NewEvent(),
 		evtKill:       xevent.NewEvent(),
-		ErrorDelay:    defaultErrorDelay,
-		PollInterval:  defaultPollInterval,
-		PollChunkSize: defaultPollChunkSize,
-		PollMaxSize:   defaultPollMaxSize,
+		ErrorDelay:    opts.GetFloat64("error_delay", DEFAULT_ERRORDELAY),
+		PollInterval:  opts.GetFloat64("poll_interval", DEFAULT_POLLINTERVAL),
+		PollChunkSize: opts.GetInt("poll_chunksize", DEFAULT_POLLCHUNKSIZE),
+		PollMaxSize:   opts.GetInt("poll_maxsize", DEFAULT_POLLMAXSIZE),
 	}
 }
 

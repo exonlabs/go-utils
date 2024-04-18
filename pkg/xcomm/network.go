@@ -8,14 +8,12 @@ import (
 	"runtime"
 	"strings"
 	"time"
-
-	"github.com/exonlabs/go-utils/pkg/xlog"
 )
 
 const (
-	defaultConnectTimeout    = float64(10)
-	defaultKeepAliveInterval = float64(30)
-	defaultListenerPool      = int(1)
+	DEFAULT_CONNECTTIMEOUT    = float64(10)
+	DEFAULT_KEEPALIVEINTERVAL = float64(30)
+	DEFAULT_LISTENERPOOL      = int(1)
 )
 
 // Network Connection URI
@@ -90,12 +88,14 @@ type NetConnection struct {
 
 // NewNetConnection creates a new SockClient instance
 func NewNetConnection(
-	uri string, log *xlog.Logger) (*NetConnection, error) {
+	uri string, opts Options, log *Logger) (*NetConnection, error) {
 	var err error
 	nc := &NetConnection{
-		BaseConnection:    newBaseConnection(uri, log),
-		ConnectTimeout:    defaultConnectTimeout,
-		KeepAliveInterval: defaultKeepAliveInterval,
+		BaseConnection: newBaseConnection(uri, opts, log),
+		ConnectTimeout: opts.GetFloat64(
+			"connect_timeout", DEFAULT_CONNECTTIMEOUT),
+		KeepAliveInterval: opts.GetFloat64(
+			"keepalive_interval", DEFAULT_KEEPALIVEINTERVAL),
 	}
 	nc.network, nc.address, err = parseNetURI(uri)
 	if err != nil {
@@ -286,11 +286,12 @@ type NetListener struct {
 	ListenerPool int
 }
 
-func NewNetListener(uri string, log *xlog.Logger) (*NetListener, error) {
+func NewNetListener(
+	uri string, opts Options, log *Logger) (*NetListener, error) {
 	var err error
 	nl := &NetListener{
-		BaseConnection: newBaseConnection(uri, log),
-		ListenerPool:   defaultListenerPool,
+		BaseConnection: newBaseConnection(uri, opts, log),
+		ListenerPool:   opts.GetInt("listener_pool", DEFAULT_LISTENERPOOL),
 	}
 	nl.network, nl.address, err = parseNetURI(uri)
 	if err != nil {
@@ -342,7 +343,7 @@ func (nl *NetListener) run() {
 		}
 
 		nc_uri := fmt.Sprintf("%s@%s", nl.network, nc_sock.RemoteAddr())
-		nc, err := NewNetConnection(nc_uri, nl.Log)
+		nc, err := NewNetConnection(nc_uri, nil, nl.Log)
 		nc.sock = nc_sock
 		nc.parent = nl
 		nc.uriLogging = true

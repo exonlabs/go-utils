@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/exonlabs/go-utils/pkg/sync/xevent"
+	"github.com/exonlabs/go-utils/pkg/types"
 	"golang.org/x/sys/unix"
 )
 
@@ -28,6 +29,8 @@ var (
 	ErrWrite   = fmt.Errorf("%wwrite pipe failed", ErrError)
 )
 
+type Options = types.NDict
+
 type Pipe struct {
 	fd       *os.File
 	filePath string
@@ -40,14 +43,14 @@ type Pipe struct {
 	WriteTimeout  float64
 }
 
-func NewPipe(path string) *Pipe {
+func NewPipe(path string, opts Options) *Pipe {
 	return &Pipe{
 		filePath:      filepath.Clean(path),
 		evtBreak:      xevent.NewEvent(),
-		PollInterval:  DEFAULT_POLLINTERVAL,
-		PollChunkSize: DEFAULT_POLLCHUNKSIZE,
-		ReadTimeout:   DEFAULT_RWTIMEOUT,
-		WriteTimeout:  DEFAULT_RWTIMEOUT,
+		PollInterval:  opts.GetFloat64("poll_interval", DEFAULT_POLLINTERVAL),
+		PollChunkSize: opts.GetInt("poll_chunksize", DEFAULT_POLLCHUNKSIZE),
+		ReadTimeout:   opts.GetFloat64("read_timeout", DEFAULT_RWTIMEOUT),
+		WriteTimeout:  opts.GetFloat64("write_timeout", DEFAULT_RWTIMEOUT),
 	}
 }
 

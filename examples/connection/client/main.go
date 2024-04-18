@@ -62,7 +62,7 @@ func main() {
 
 	logger := xlog.NewStdoutLogger("main")
 
-	cli, err := xcomm.NewConnection(*uri, logger)
+	cli, err := xcomm.NewConnection(*uri, nil, logger)
 	if err != nil {
 		panic(err)
 	}

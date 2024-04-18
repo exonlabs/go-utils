@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/exonlabs/go-utils/pkg/xlog"
 	"go.bug.st/serial"
 )
 
@@ -103,10 +102,10 @@ type SerialConnection struct {
 }
 
 func NewSerialConnection(
-	uri string, log *xlog.Logger) (*SerialConnection, error) {
+	uri string, opts Options, log *Logger) (*SerialConnection, error) {
 	var err error
 	sc := &SerialConnection{
-		BaseConnection: newBaseConnection(uri, log),
+		BaseConnection: newBaseConnection(uri, opts, log),
 	}
 	sc.port, sc.mode, err = parseSerialURI(uri)
 	if err != nil {
@@ -274,8 +273,9 @@ type SerialListener struct {
 	connHandler func(Connection)
 }
 
-func NewSerialListener(uri string, log *xlog.Logger) (*SerialListener, error) {
-	sc, err := NewSerialConnection(uri, log)
+func NewSerialListener(
+	uri string, opts Options, log *Logger) (*SerialListener, error) {
+	sc, err := NewSerialConnection(uri, opts, log)
 	if err != nil {
 		return nil, err
 	}

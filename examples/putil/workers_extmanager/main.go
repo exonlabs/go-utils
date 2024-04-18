@@ -190,8 +190,8 @@ func main() {
 	rm := NewRtManager(logger)
 	rm.ProcTitle = "WrkManager"
 	rm.InitManagement(
-		xpipe.NewPipe(inpipe_file),
-		xpipe.NewPipe(outpipe_file),
+		xpipe.NewPipe(inpipe_file, nil),
+		xpipe.NewPipe(outpipe_file, nil),
 		rm.HandleCommand,
 	)
 

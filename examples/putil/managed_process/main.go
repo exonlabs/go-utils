@@ -118,8 +118,8 @@ func main() {
 	pr := NewSampleProcess(logger)
 	pr.ProcTitle = "SampleProcess"
 	pr.InitManagement(
-		xpipe.NewPipe(inpipe_file),
-		xpipe.NewPipe(outpipe_file),
+		xpipe.NewPipe(inpipe_file, nil),
+		xpipe.NewPipe(outpipe_file, nil),
 		pr.HandleCommand,
 	)
 

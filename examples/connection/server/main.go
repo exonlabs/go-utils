@@ -67,7 +67,7 @@ func main() {
 
 	logger := xlog.NewStdoutLogger("main")
 
-	srv, err := xcomm.NewListener(*uri, logger)
+	srv, err := xcomm.NewListener(*uri, nil, logger)
 	if err != nil {
 		panic(err)
 	}

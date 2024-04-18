@@ -28,7 +28,7 @@ func receiver_print(msg string, args ...any) {
 
 func CheckPeerPipe(path string, timeout float64) {
 	sender_print("-- starting sender")
-	p := xpipe.NewPipe(path)
+	p := xpipe.NewPipe(path, nil)
 	defer sender_print("-- stop sender")
 
 	msg := "HELLO"
@@ -44,7 +44,7 @@ func CheckPeerPipe(path string, timeout float64) {
 
 func StartInputPipe(path string, timeout float64) {
 	receiver_print("-- starting receiver")
-	p := xpipe.NewPipe(path)
+	p := xpipe.NewPipe(path, nil)
 	defer receiver_print("-- stop receiver")
 
 	b, err := p.ReadWait(timeout)
@@ -57,7 +57,7 @@ func StartInputPipe(path string, timeout float64) {
 
 func SendingMsgs(path string, timeout float64) {
 	sender_print("-- starting sender")
-	p := xpipe.NewPipe(path)
+	p := xpipe.NewPipe(path, nil)
 	defer sender_print("-- stop sender")
 
 	for i := 1; i <= 5; i++ {
@@ -72,7 +72,7 @@ func SendingMsgs(path string, timeout float64) {
 
 func StartCmdHandler(path string, timeout float64) {
 	receiver_print("-- starting receiver")
-	p := xpipe.NewPipe(path)
+	p := xpipe.NewPipe(path, nil)
 	defer receiver_print("-- stop receiver")
 
 	var wg sync.WaitGroup
