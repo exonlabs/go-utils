@@ -35,7 +35,7 @@ func parseSerialURI(uri string) (string, serial.Mode, error) {
 	var err error
 
 	p := strings.SplitN(uri, "@", 2)
-	if len(p) < 2 || p[0] != "serial" {
+	if len(p) < 2 || strings.ToLower(p[0]) != "serial" {
 		return "", serial.Mode{}, ErrInvalidUri
 	}
 	p = strings.Split(p[1], ":")
@@ -188,7 +188,7 @@ func (sc *SerialConnection) Send(data []byte) error {
 	return nil
 }
 
-// Recv data from the socket connection
+// Recv data from the serial connection
 func (sc *SerialConnection) Recv() ([]byte, error) {
 	if !sc.IsOpened() {
 		return nil, ErrNotOpend
@@ -240,7 +240,7 @@ func (sc *SerialConnection) Recv() ([]byte, error) {
 	return data, nil
 }
 
-// Receives data with a specified timeout from the socket connection
+// Receives data with a specified timeout from the serial connection
 func (sc *SerialConnection) RecvWait(timeout float64) ([]byte, error) {
 	sc.evtBreak.Clear()
 	tbreak := float64(time.Now().Unix()) + timeout

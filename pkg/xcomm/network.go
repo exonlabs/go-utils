@@ -49,6 +49,7 @@ func parseNetURI(uri string) (string, string, error) {
 	if len(p) < 2 {
 		return "", "", ErrInvalidUri
 	}
+	p[0] = strings.ToLower(p[0])
 
 	switch p[0] {
 	case "tcp", "tcp4", "tcp6", "udp", "udp4", "udp6":

@@ -69,7 +69,7 @@ type BaseConnection struct {
 
 func newBaseConnection(uri string, opts Options, log *Logger) *BaseConnection {
 	return &BaseConnection{
-		uri:           strings.TrimSpace(strings.ToLower(uri)),
+		uri:           strings.TrimSpace(uri),
 		Log:           log,
 		evtBreak:      xevent.NewEvent(),
 		evtKill:       xevent.NewEvent(),
