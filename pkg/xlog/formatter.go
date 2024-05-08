@@ -51,6 +51,13 @@ func BasicFormatter() *Formatter {
 	}
 }
 
+// raw text formatted log record, just the message
+func RawFormatter() *Formatter {
+	return &Formatter{
+		RecordFormat: "{message}",
+	}
+}
+
 // customized message text formatter
 func CustomMsgFormatter(recFmt string) *Formatter {
 	return &Formatter{
