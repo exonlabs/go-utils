@@ -44,7 +44,7 @@ const (
 //   - unix@/path/to/socket/file
 
 // parse and validate uri
-func parseNetURI(uri string) (string, string, error) {
+func parse_net_uri(uri string) (string, string, error) {
 	p := strings.SplitN(uri, "@", 2)
 	if len(p) < 2 {
 		return "", "", ErrInvalidUri
@@ -89,18 +89,22 @@ type NetConnection struct {
 
 // NewNetConnection creates a new SockClient instance
 func NewNetConnection(
-	uri string, opts Options, log *Logger) (*NetConnection, error) {
+	uri string, log *Logger, opts Options) (*NetConnection, error) {
 	var err error
 	nc := &NetConnection{
-		BaseConnection: newBaseConnection(uri, opts, log),
-		ConnectTimeout: opts.GetFloat64(
-			"connect_timeout", DEFAULT_CONNECTTIMEOUT),
-		KeepAliveInterval: opts.GetFloat64(
-			"keepalive_interval", DEFAULT_KEEPALIVEINTERVAL),
+		BaseConnection:    new_base_connection(uri, log, opts),
+		ConnectTimeout:    DEFAULT_CONNECTTIMEOUT,
+		KeepAliveInterval: DEFAULT_KEEPALIVEINTERVAL,
 	}
-	nc.network, nc.address, err = parseNetURI(uri)
+	nc.network, nc.address, err = parse_net_uri(uri)
 	if err != nil {
 		return nil, err
+	}
+	if opts != nil {
+		nc.ConnectTimeout = opts.GetFloat64(
+			"connect_timeout", DEFAULT_CONNECTTIMEOUT)
+		nc.KeepAliveInterval = opts.GetFloat64(
+			"keepalive_interval", DEFAULT_KEEPALIVEINTERVAL)
 	}
 	return nc, nil
 }
@@ -288,15 +292,18 @@ type NetListener struct {
 }
 
 func NewNetListener(
-	uri string, opts Options, log *Logger) (*NetListener, error) {
+	uri string, log *Logger, opts Options) (*NetListener, error) {
 	var err error
 	nl := &NetListener{
-		BaseConnection: newBaseConnection(uri, opts, log),
-		ListenerPool:   opts.GetInt("listener_pool", DEFAULT_LISTENERPOOL),
+		BaseConnection: new_base_connection(uri, log, opts),
+		ListenerPool:   DEFAULT_LISTENERPOOL,
 	}
-	nl.network, nl.address, err = parseNetURI(uri)
+	nl.network, nl.address, err = parse_net_uri(uri)
 	if err != nil {
 		return nil, err
+	}
+	if opts != nil {
+		nl.ListenerPool = opts.GetInt("listener_pool", DEFAULT_LISTENERPOOL)
 	}
 	return nl, nil
 }
@@ -344,7 +351,7 @@ func (nl *NetListener) run() {
 		}
 
 		nc_uri := fmt.Sprintf("%s@%s", nl.network, nc_sock.RemoteAddr())
-		nc, err := NewNetConnection(nc_uri, nil, nl.Log)
+		nc, err := NewNetConnection(nc_uri, nl.Log, nil)
 		nc.sock = nc_sock
 		nc.parent = nl
 		nc.uriLogging = true

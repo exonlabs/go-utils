@@ -31,7 +31,7 @@ import (
 //   - serial@COM1:115200:8N1         (win)
 
 // parse and validate uri
-func parseSerialURI(uri string) (string, serial.Mode, error) {
+func parse_serial_uri(uri string) (string, serial.Mode, error) {
 	var err error
 
 	p := strings.SplitN(uri, "@", 2)
@@ -102,12 +102,12 @@ type SerialConnection struct {
 }
 
 func NewSerialConnection(
-	uri string, opts Options, log *Logger) (*SerialConnection, error) {
+	uri string, log *Logger, opts Options) (*SerialConnection, error) {
 	var err error
 	sc := &SerialConnection{
-		BaseConnection: newBaseConnection(uri, opts, log),
+		BaseConnection: new_base_connection(uri, log, opts),
 	}
-	sc.port, sc.mode, err = parseSerialURI(uri)
+	sc.port, sc.mode, err = parse_serial_uri(uri)
 	if err != nil {
 		return nil, err
 	}
@@ -274,8 +274,8 @@ type SerialListener struct {
 }
 
 func NewSerialListener(
-	uri string, opts Options, log *Logger) (*SerialListener, error) {
-	sc, err := NewSerialConnection(uri, opts, log)
+	uri string, log *Logger, opts Options) (*SerialListener, error) {
+	sc, err := NewSerialConnection(uri, log, opts)
 	if err != nil {
 		return nil, err
 	}

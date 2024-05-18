@@ -18,8 +18,8 @@ const (
 	DEFAULT_POLLMAXSIZE   = int(0)
 )
 
-type Options = types.NDict
 type Logger = xlog.Logger
+type Options = types.NDict
 
 // interface representing connection
 type Connection interface {
@@ -67,17 +67,29 @@ type BaseConnection struct {
 	PollMaxSize   int
 }
 
-func newBaseConnection(uri string, opts Options, log *Logger) *BaseConnection {
-	return &BaseConnection{
+func new_base_connection(
+	uri string, log *Logger, opts Options) *BaseConnection {
+	conn := &BaseConnection{
 		uri:           strings.TrimSpace(uri),
 		Log:           log,
 		evtBreak:      xevent.NewEvent(),
 		evtKill:       xevent.NewEvent(),
-		ErrorDelay:    opts.GetFloat64("error_delay", DEFAULT_ERRORDELAY),
-		PollInterval:  opts.GetFloat64("poll_interval", DEFAULT_POLLINTERVAL),
-		PollChunkSize: opts.GetInt("poll_chunksize", DEFAULT_POLLCHUNKSIZE),
-		PollMaxSize:   opts.GetInt("poll_maxsize", DEFAULT_POLLMAXSIZE),
+		ErrorDelay:    DEFAULT_ERRORDELAY,
+		PollInterval:  DEFAULT_POLLINTERVAL,
+		PollChunkSize: DEFAULT_POLLCHUNKSIZE,
+		PollMaxSize:   DEFAULT_POLLMAXSIZE,
 	}
+	if opts != nil {
+		conn.ErrorDelay = opts.GetFloat64(
+			"error_delay", DEFAULT_ERRORDELAY)
+		conn.PollInterval = opts.GetFloat64(
+			"poll_interval", DEFAULT_POLLINTERVAL)
+		conn.PollChunkSize = opts.GetInt(
+			"poll_chunksize", DEFAULT_POLLCHUNKSIZE)
+		conn.PollMaxSize = opts.GetInt(
+			"poll_maxsize", DEFAULT_POLLMAXSIZE)
+	}
+	return conn
 }
 
 // implement Stringer interface
@@ -123,5 +135,31 @@ func (bs *BaseConnection) rxLog(data []byte) {
 			msg = "[" + bs.uri + "]  " + msg
 		}
 		bs.Log.Info(msg)
+	}
+}
+
+////////////////////////////////////// utils
+
+// create new connection handler
+func NewConnection(
+	uri string, log *Logger, opts Options) (Connection, error) {
+	t := strings.ToLower(strings.SplitN(uri, "@", 2)[0])
+	switch t {
+	case "serial":
+		return NewSerialConnection(uri, log, opts)
+	default:
+		return NewNetConnection(uri, log, opts)
+	}
+}
+
+// create new listener handler
+func NewListener(
+	uri string, log *Logger, opts Options) (Listener, error) {
+	t := strings.ToLower(strings.SplitN(uri, "@", 2)[0])
+	switch t {
+	case "serial":
+		return NewSerialListener(uri, log, opts)
+	default:
+		return NewNetListener(uri, log, opts)
 	}
 }
