@@ -15,12 +15,23 @@ type Formatter struct {
 // generate new formatted log record
 func (f *Formatter) Emit(
 	lvl Level, src string, msg string, args ...any) string {
+	now := time.Now().Local()
+
+	var t string
+	if len(f.TimeFormat) == 0 {
+		t = now.Format("2006-01-02 15:04:05.000000")
+	} else {
+		t = now.Format(f.TimeFormat)
+	}
+
 	m := fmt.Sprintf(msg, args...)
 	if f.EscapeMsg {
+		m = strings.ReplaceAll(m, `\`, `\\`)
 		m = strings.ReplaceAll(m, `"`, `\"`)
 	}
+
 	return strings.NewReplacer(
-		"{time}", time.Now().Local().Format(f.TimeFormat),
+		"{time}", t,
 		"{level}", lvl.String(),
 		"{source}", src,
 		"{message}", m,
@@ -55,6 +66,7 @@ func BasicFormatter() *Formatter {
 func RawFormatter() *Formatter {
 	return &Formatter{
 		RecordFormat: "{message}",
+		TimeFormat:   "",
 	}
 }
 
