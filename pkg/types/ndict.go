@@ -723,3 +723,10 @@ func (d NDict) Update(updt map[string]any) {
 		}
 	}
 }
+
+// delete all values from dict
+func (d NDict) Reset() {
+	for k := range d {
+		delete(d, k)
+	}
+}

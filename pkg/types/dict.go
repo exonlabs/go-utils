@@ -654,3 +654,10 @@ func (d Dict) Update(updt map[string]any) {
 		}
 	}
 }
+
+// delete all values from dict
+func (d Dict) Reset() {
+	for k := range d {
+		delete(d, k)
+	}
+}
