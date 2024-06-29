@@ -40,16 +40,16 @@ func main() {
 	if err := cfg.Save(); err != nil {
 		panic(err)
 	}
-	fmt.Println("check master config exist:", cfg.IsExist())
-	fmt.Println("check backup config exist:", cfg.IsBackupExist())
+	fmt.Println("check master config exist:", cfg.IsFileExist())
+	fmt.Println("check backup config exist:", cfg.IsBakFileExist())
 
-	println("\n")
+	fmt.Println("")
 
 	fmt.Println("-- removing master config")
 	os.Remove(CFGFILE)
-	fmt.Println("check master config exist:", cfg.IsExist())
+	fmt.Println("check master config exist:", cfg.IsFileExist())
 
-	println("\n")
+	fmt.Println("")
 
 	fmt.Println("-- reloading config")
 	cfg1 := xcfg.NewJsonConfig(CFGFILE, nil)

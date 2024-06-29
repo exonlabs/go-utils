@@ -99,7 +99,7 @@ func main() {
 
 	cfg := NewConfig()
 	fmt.Println("\n* using cfg file:", CFGFILE)
-	if cfg.IsExist() {
+	if cfg.IsFileExist() {
 		if err := cfg.Load(); err != nil {
 			panic(err)
 		}

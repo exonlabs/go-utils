@@ -21,7 +21,7 @@ type fileConfig struct {
 	filepath string
 	bakpath  string
 
-	// load and dump callback func pointers
+	// load and dump callback func pointers for buffer serialization
 	loader func([]byte) error
 	dumper func() ([]byte, error)
 
@@ -52,19 +52,14 @@ func (cfg *fileConfig) EnableBackup(bakpath string) error {
 	return nil
 }
 
-// reset local buffer
-func (cfg *fileConfig) Reset() {
-	cfg.Buffer = Buffer(nil)
-}
-
 // check config file exist on disk
-func (cfg *fileConfig) IsExist() bool {
+func (cfg *fileConfig) IsFileExist() bool {
 	_, err := os.Stat(cfg.filepath)
 	return !os.IsNotExist(err)
 }
 
-// check backup config file exist on disk, if backup support enabled.
-func (cfg *fileConfig) IsBackupExist() bool {
+// check backup config file exist on disk, if backup support enabled
+func (cfg *fileConfig) IsBakFileExist() bool {
 	if cfg.bakpath != "" {
 		_, err := os.Stat(cfg.bakpath)
 		return !os.IsNotExist(err)
@@ -82,7 +77,7 @@ func (cfg *fileConfig) Load() error {
 
 	var b []byte
 	var err error
-	if cfg.IsExist() {
+	if cfg.IsFileExist() {
 		b, err = os.ReadFile(cfg.filepath)
 		if err == nil {
 			err = cfg.loader(b)
@@ -92,7 +87,7 @@ func (cfg *fileConfig) Load() error {
 			}
 		}
 	}
-	if cfg.IsBackupExist() {
+	if cfg.IsBakFileExist() {
 		b, err = os.ReadFile(cfg.bakpath)
 		if err == nil {
 			err = cfg.loader(b)
@@ -136,10 +131,10 @@ func (cfg *fileConfig) Purge() error {
 		return fmt.Errorf("invalid config file path")
 	}
 	cfg.Reset()
-	if cfg.IsBackupExist() {
+	if cfg.IsBakFileExist() {
 		os.Remove(cfg.bakpath)
 	}
-	if cfg.IsExist() {
+	if cfg.IsFileExist() {
 		return os.Remove(cfg.filepath)
 	}
 	return nil
