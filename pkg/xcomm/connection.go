@@ -12,10 +12,8 @@ import (
 )
 
 const (
-	DEFAULT_ERRORDELAY    = float64(1)
-	DEFAULT_POLLINTERVAL  = float64(0.005)
-	DEFAULT_POLLCHUNKSIZE = int(4096)
-	DEFAULT_POLLMAXSIZE   = int(0)
+	POLL_CHUNKSIZE = int(1024)
+	POLL_MAXSIZE   = int(0)
 )
 
 type Logger = xlog.Logger
@@ -74,20 +72,20 @@ func new_base_connection(
 		Log:           log,
 		evtBreak:      xevent.NewEvent(),
 		evtKill:       xevent.NewEvent(),
-		ErrorDelay:    DEFAULT_ERRORDELAY,
-		PollInterval:  DEFAULT_POLLINTERVAL,
-		PollChunkSize: DEFAULT_POLLCHUNKSIZE,
-		PollMaxSize:   DEFAULT_POLLMAXSIZE,
+		ErrorDelay:    0.5,
+		PollChunkSize: POLL_CHUNKSIZE,
+		PollMaxSize:   POLL_MAXSIZE,
 	}
 	if opts != nil {
-		conn.ErrorDelay = opts.GetFloat64(
-			"error_delay", DEFAULT_ERRORDELAY)
-		conn.PollInterval = opts.GetFloat64(
-			"poll_interval", DEFAULT_POLLINTERVAL)
-		conn.PollChunkSize = opts.GetInt(
-			"poll_chunksize", DEFAULT_POLLCHUNKSIZE)
-		conn.PollMaxSize = opts.GetInt(
-			"poll_maxsize", DEFAULT_POLLMAXSIZE)
+		if v := opts.GetFloat64("poll_interval", 0); v > 0 {
+			conn.PollInterval = v
+		}
+		if v := opts.GetInt("poll_chunksize", 0); v > 0 {
+			conn.PollChunkSize = v
+		}
+		if v := opts.GetInt("poll_maxsize", 0); v >= 0 {
+			conn.PollMaxSize = v
+		}
 	}
 	return conn
 }

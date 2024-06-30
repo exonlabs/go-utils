@@ -11,9 +11,9 @@ import (
 )
 
 const (
-	DEFAULT_CONNECTTIMEOUT    = float64(10)
-	DEFAULT_KEEPALIVEINTERVAL = float64(30)
-	DEFAULT_LISTENERPOOL      = int(1)
+	NET_CONNECT_TIMEOUT    = float64(10)
+	NET_KEEPALIVE_INTERVAL = float64(30)
+	NET_LISTENER_POOL      = int(1)
 )
 
 // Network Connection URI
@@ -93,18 +93,23 @@ func NewNetConnection(
 	var err error
 	nc := &NetConnection{
 		BaseConnection:    new_base_connection(uri, log, opts),
-		ConnectTimeout:    DEFAULT_CONNECTTIMEOUT,
-		KeepAliveInterval: DEFAULT_KEEPALIVEINTERVAL,
+		ConnectTimeout:    NET_CONNECT_TIMEOUT,
+		KeepAliveInterval: NET_KEEPALIVE_INTERVAL,
 	}
 	nc.network, nc.address, err = parse_net_uri(uri)
 	if err != nil {
 		return nil, err
 	}
 	if opts != nil {
-		nc.ConnectTimeout = opts.GetFloat64(
-			"connect_timeout", DEFAULT_CONNECTTIMEOUT)
-		nc.KeepAliveInterval = opts.GetFloat64(
-			"keepalive_interval", DEFAULT_KEEPALIVEINTERVAL)
+		if v := opts.GetFloat64("connect_timeout", 0); v >= 0 {
+			nc.ConnectTimeout = v
+		}
+		if v := opts.GetFloat64("keepalive_interval", 0); v >= 0 {
+			nc.KeepAliveInterval = v
+		}
+	}
+	if nc.PollInterval <= 0 {
+		nc.PollInterval = 0.000001 // 1us
 	}
 	return nc, nil
 }
@@ -205,12 +210,13 @@ func (nc *NetConnection) Recv() ([]byte, error) {
 	}
 
 	data := []byte(nil)
+	td := time.Duration(nc.PollInterval * 1000000000)
 	for {
 		b := make([]byte, nc.PollChunkSize)
 
-		nc.sock.SetReadDeadline(
-			time.Now().Add(time.Duration(nc.PollInterval * 1000000000)))
-
+		if td > 0 {
+			nc.sock.SetReadDeadline(time.Now().Add(td))
+		}
 		n, err := nc.sock.Read(b)
 		if err != nil {
 			if errIsClosed(err) {
@@ -296,20 +302,20 @@ func NewNetListener(
 	var err error
 	nl := &NetListener{
 		BaseConnection: new_base_connection(uri, log, opts),
-		ListenerPool:   DEFAULT_LISTENERPOOL,
+		ListenerPool:   NET_LISTENER_POOL,
 	}
 	nl.network, nl.address, err = parse_net_uri(uri)
 	if err != nil {
 		return nil, err
 	}
 	if opts != nil {
-		nl.ListenerPool = opts.GetInt("listener_pool", DEFAULT_LISTENERPOOL)
+		nl.ListenerPool = opts.GetInt("listener_pool", NET_LISTENER_POOL)
 	}
 	return nl, nil
 }
 
-func (nc *NetListener) NetHandler() net.Listener {
-	return nc.sock
+func (nl *NetListener) NetHandler() net.Listener {
+	return nl.sock
 }
 
 func (nl *NetListener) SetConnHandler(f func(Connection)) {

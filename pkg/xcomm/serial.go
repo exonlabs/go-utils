@@ -11,9 +11,9 @@ import (
 )
 
 // const (
-// 	defaultXONXOFF = bool(false)
-// 	defaultRTSCTS  = bool(false)
-// 	defaultDSRDTR  = bool(false)
+// 	SERIAL_XONXOFF = bool(false)
+// 	SERIAL_RTSCTS  = bool(false)
+// 	SERIAL_DSRDTR  = bool(false)
 // )
 
 // Serial Connection URI
@@ -96,9 +96,6 @@ type SerialConnection struct {
 
 	// parent server handler
 	parent *SerialListener
-
-	// poll delay relative to baud rate
-	polldelay float64
 }
 
 func NewSerialConnection(
@@ -111,10 +108,13 @@ func NewSerialConnection(
 	if err != nil {
 		return nil, err
 	}
-	// set delay to actual byte duration, then
-	// take max with defined PollInterval
-	sc.polldelay = math.Max(sc.PollInterval,
-		math.Ceil(10000/float64(sc.mode.BaudRate))/1000)
+	if sc.PollInterval <= 0 {
+		sc.PollInterval = 0.000050 // 50us
+	}
+	// set polling relative to baudrate. set to slightly more than twice
+	// actual byte (10 bits) duration, then max with PollInterval
+	sc.PollInterval = math.Max(sc.PollInterval,
+		math.Ceil(20500000/float64(sc.mode.BaudRate))/1000000)
 	return sc, nil
 }
 
@@ -196,11 +196,12 @@ func (sc *SerialConnection) Recv() ([]byte, error) {
 
 	chk := true
 	data := []byte(nil)
+	td := time.Duration(sc.PollInterval * 1000000000)
+	if td > 0 {
+		sc.com.SetReadTimeout(td)
+	}
 	for {
 		b := make([]byte, sc.PollChunkSize)
-
-		sc.com.SetReadTimeout(
-			time.Duration(sc.polldelay * 1000000000))
 
 		n, err := sc.com.Read(b)
 		if err != nil {
@@ -312,7 +313,6 @@ func (sl *SerialListener) Start() error {
 func (sl *SerialListener) run() {
 	for sl.IsActive() {
 		sl.connHandler(sl)
-		sl.Sleep(1)
 	}
 }
 
