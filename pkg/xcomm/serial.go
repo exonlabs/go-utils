@@ -10,12 +10,6 @@ import (
 	"go.bug.st/serial"
 )
 
-// const (
-// 	defaultXONXOFF = bool(false)
-// 	defaultRTSCTS  = bool(false)
-// 	defaultDSRDTR  = bool(false)
-// )
-
 // Serial Connection URI
 //
 // format:  serial@<port>:<baud>:<mode>[:<opts>]
@@ -36,21 +30,21 @@ func parse_serial_uri(uri string) (string, serial.Mode, error) {
 
 	p := strings.SplitN(uri, "@", 2)
 	if len(p) < 2 || strings.ToLower(p[0]) != "serial" {
-		return "", serial.Mode{}, ErrInvalidUri
+		return "", serial.Mode{}, ErrUri
 	}
 	p = strings.Split(p[1], ":")
 	if len(p) < 3 || len(p[2]) != 3 {
-		return "", serial.Mode{}, ErrInvalidUri
+		return "", serial.Mode{}, ErrUri
 	}
 
 	mode := serial.Mode{}
 	mode.BaudRate, err = strconv.Atoi(p[1])
 	if err != nil {
-		return "", serial.Mode{}, ErrInvalidUri
+		return "", serial.Mode{}, ErrUri
 	}
 	mode.DataBits, err = strconv.Atoi(string(p[2][0]))
 	if err != nil {
-		return "", serial.Mode{}, ErrInvalidUri
+		return "", serial.Mode{}, ErrUri
 	}
 	switch string(p[2][1]) {
 	case "n", "N":
@@ -64,7 +58,7 @@ func parse_serial_uri(uri string) (string, serial.Mode, error) {
 	case "s", "S":
 		mode.Parity = serial.SpaceParity
 	default:
-		return "", serial.Mode{}, ErrInvalidUri
+		return "", serial.Mode{}, ErrUri
 	}
 	switch string(p[2][2]) {
 	case "1":
@@ -72,7 +66,7 @@ func parse_serial_uri(uri string) (string, serial.Mode, error) {
 	case "2":
 		mode.StopBits = serial.TwoStopBits
 	default:
-		return "", serial.Mode{}, ErrInvalidUri
+		return "", serial.Mode{}, ErrUri
 	}
 	// mode.InitialStatusBits = &serial.ModemOutputBits{
 	// 	RTS: false,
@@ -86,35 +80,31 @@ func parse_serial_uri(uri string) (string, serial.Mode, error) {
 
 // Serial Connection
 type SerialConnection struct {
-	*BaseConnection
+	*baseConnection
 
 	port string
 	mode serial.Mode
 
 	// low level serial port handler
 	com serial.Port
-
 	// parent server handler
 	parent *SerialListener
-
-	// poll delay relative to baud rate
-	polldelay float64
 }
 
 func NewSerialConnection(
 	uri string, log *Logger, opts Options) (*SerialConnection, error) {
 	var err error
 	sc := &SerialConnection{
-		BaseConnection: new_base_connection(uri, log, opts),
+		baseConnection: new_base_connection(uri, log, opts),
 	}
 	sc.port, sc.mode, err = parse_serial_uri(uri)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w%s", ErrError, err)
 	}
-	// set delay to actual byte duration, then
-	// take max with defined PollInterval
-	sc.polldelay = math.Max(sc.PollInterval,
-		math.Ceil(10000/float64(sc.mode.BaudRate))/1000)
+	// set max polling relative to baudrate. set to more than 10 times
+	// actual byte duration (10 bits)
+	sc.PollInterval = math.Max(sc.PollInterval,
+		math.Ceil(100000000/float64(sc.mode.BaudRate))/1000000)
 	return sc, nil
 }
 
@@ -131,18 +121,25 @@ func (sc *SerialConnection) IsOpened() bool {
 }
 
 func (sc *SerialConnection) Open() error {
-	sc.Close()
+	if !sc.op_mux.TryLock() {
+		return nil
+	}
+	defer sc.op_mux.Unlock()
 
 	sc.evtBreak.Clear()
 	sc.evtKill.Clear()
 
-	sc.log("OPEN -- %s", sc.uri)
+	if sc.uriLogging {
+		sc.comm_log("OPENED")
+	} else {
+		sc.comm_log("OPEN -- %s", sc.uri)
+	}
 
 	var err error
 
 	sc.com, err = serial.Open(sc.port, &sc.mode)
 	if err != nil {
-		return fmt.Errorf("%w, %s", ErrOpen, err.Error())
+		return fmt.Errorf("%w, %s", ErrConnection, err)
 	}
 
 	return nil
@@ -150,12 +147,19 @@ func (sc *SerialConnection) Open() error {
 
 // Closes the serial connection
 func (sc *SerialConnection) Close() {
+	sc.op_mux.Lock()
+	defer sc.op_mux.Unlock()
+
 	sc.evtKill.Set()
 	if sc.com != nil {
 		sc.com.Close()
-		sc.log("CLOSE -- %s", sc.uri)
+		sc.com = nil
+		if sc.uriLogging {
+			sc.comm_log("CLOSED")
+		} else {
+			sc.comm_log("CLOSE -- %s", sc.uri)
+		}
 	}
-	sc.com = nil
 }
 
 // cancel blocking operations
@@ -173,17 +177,18 @@ func (sc *SerialConnection) Send(data []byte) error {
 		return fmt.Errorf("%w, empty data", ErrError)
 	}
 	if !sc.IsOpened() {
-		return ErrNotOpend
+		return ErrClosed
 	}
-	sc.txLog(data)
+	sc.tx_Log(data)
 	_, err := sc.com.Write(data)
 	sc.com.Drain()
 	if err != nil {
 		if errIsClosed(err) {
+			sc.comm_log("PORT_CLOSED - %s", err.Error())
 			sc.Close()
 			return ErrClosed
 		}
-		return fmt.Errorf("%w, %s", ErrWrite, err.Error())
+		return fmt.Errorf("%w, %s", ErrWrite, err)
 	}
 	return nil
 }
@@ -191,52 +196,50 @@ func (sc *SerialConnection) Send(data []byte) error {
 // Recv data from the serial connection
 func (sc *SerialConnection) Recv() ([]byte, error) {
 	if !sc.IsOpened() {
-		return nil, ErrNotOpend
+		return nil, ErrClosed
 	}
 
-	chk := true
 	data := []byte(nil)
+	td := time.Duration(sc.PollInterval * 1000000000)
+	if td > 0 {
+		sc.com.SetReadTimeout(td)
+	}
+
 	for {
 		b := make([]byte, sc.PollChunkSize)
-
-		sc.com.SetReadTimeout(
-			time.Duration(sc.polldelay * 1000000000))
-
 		n, err := sc.com.Read(b)
 		if err != nil {
 			if errIsClosed(err) {
-				sc.rxLog(data)
+				sc.rx_Log(data)
+				sc.comm_log("PORT_CLOSED - %s", err.Error())
 				sc.Close()
 				return nil, ErrClosed
 			}
-			return nil, fmt.Errorf("%w, %s", ErrRead, err.Error())
+			return nil, fmt.Errorf("%w, %s", ErrRead, err)
 		}
 		if n > 0 {
 			data = append(data, b[:n]...)
-			chk = true
-		} else {
-			// do 1 extra loop to check EOF before break
-			if chk {
-				chk = false
-			} else {
+			if !sc.PollWaitNullRead && n < sc.PollChunkSize {
 				break
 			}
+		} else {
+			break
 		}
 
 		if sc.PollMaxSize > 0 && len(data) > sc.PollMaxSize {
 			break
 		}
 
-		if sc.evtKill.IsSet() {
-			sc.rxLog(data)
+		if sc.evtKill.IsSet() || (sc.parent != nil && !sc.parent.IsActive()) {
+			sc.rx_Log(data)
 			return nil, ErrClosed
 		}
 		if sc.evtBreak.IsSet() {
-			sc.rxLog(data)
+			sc.rx_Log(data)
 			return nil, ErrBreak
 		}
 	}
-	sc.rxLog(data)
+	sc.rx_Log(data)
 	return data, nil
 }
 
@@ -251,7 +254,7 @@ func (sc *SerialConnection) RecvWait(timeout float64) ([]byte, error) {
 		} else if len(data) > 0 {
 			return data, nil
 		}
-		if sc.evtKill.IsSet() {
+		if sc.evtKill.IsSet() || (sc.parent != nil && !sc.parent.IsActive()) {
 			return nil, ErrClosed
 		}
 		if sc.evtBreak.IsSet() {
@@ -275,47 +278,49 @@ type SerialListener struct {
 
 func NewSerialListener(
 	uri string, log *Logger, opts Options) (*SerialListener, error) {
+	sl := &SerialListener{}
 	sc, err := NewSerialConnection(uri, log, opts)
 	if err != nil {
 		return nil, err
 	}
-	return &SerialListener{
-		SerialConnection: sc,
-	}, nil
+	sc.parent = sl
+	sl.SerialConnection = sc
+	return sl, nil
 }
 
 func (sl *SerialListener) PortHandler() serial.Port {
 	return sl.com
 }
 
-func (sl *SerialListener) SetConnHandler(f func(Connection)) {
-	sl.connHandler = f
+func (sl *SerialListener) SetConnHandler(h func(Connection)) {
+	sl.connHandler = h
 }
 
 func (sl *SerialListener) IsActive() bool {
 	return sl.IsOpened()
 }
 
+// no close action in listener mode, nust use stop method
+func (sl *SerialListener) Close() {}
+
 func (sl *SerialListener) Start() error {
 	if sl.connHandler == nil {
-		return fmt.Errorf("%w, invalid connection handler", ErrOpen)
+		return fmt.Errorf("%wconnection handler not set", ErrError)
 	}
 
 	if err := sl.Open(); err != nil {
 		return err
 	}
 
-	sl.run()
+	// run forever
+	for sl.IsActive() {
+		sl.connHandler(sl)
+	}
+
+	sl.SerialConnection.Close()
 	return nil
 }
 
-func (sl *SerialListener) run() {
-	for sl.IsActive() {
-		sl.connHandler(sl)
-		sl.Sleep(1)
-	}
-}
-
 func (sl *SerialListener) Stop() {
-	sl.Close()
+	sl.SerialConnection.Close()
 }

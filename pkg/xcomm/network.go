@@ -7,13 +7,16 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
+
+	"golang.org/x/net/netutil"
 )
 
 const (
-	DEFAULT_CONNECTTIMEOUT    = float64(10)
-	DEFAULT_KEEPALIVEINTERVAL = float64(30)
-	DEFAULT_LISTENERPOOL      = int(1)
+	NET_CONNECT_TIMEOUT    = float64(10)
+	NET_KEEPALIVE_INTERVAL = float64(30)
+	NET_CONNECTIONS_LIMIT  = int(0)
 )
 
 // Network Connection URI
@@ -47,7 +50,7 @@ const (
 func parse_net_uri(uri string) (string, string, error) {
 	p := strings.SplitN(uri, "@", 2)
 	if len(p) < 2 {
-		return "", "", ErrInvalidUri
+		return "", "", ErrUri
 	}
 	p[0] = strings.ToLower(p[0])
 
@@ -55,11 +58,11 @@ func parse_net_uri(uri string) (string, string, error) {
 	case "tcp", "tcp4", "tcp6", "udp", "udp4", "udp6":
 		v := strings.Split(p[1], ":")
 		if len(v) < 2 {
-			return "", "", ErrInvalidUri
+			return "", "", ErrUri
 		}
 	case "unix", "unixgram", "unixpacket":
 		if p[1][len(p[1])-1] == filepath.Separator || !filepath.IsAbs(p[1]) {
-			return "", "", ErrInvalidUri
+			return "", "", ErrUri
 		}
 	}
 
@@ -70,14 +73,14 @@ func parse_net_uri(uri string) (string, string, error) {
 
 // Network Connection
 type NetConnection struct {
-	*BaseConnection
+	*baseConnection
 
+	// connection attrs
 	network string
 	address string
 
 	// low level network connection handler
 	sock net.Conn
-
 	// parent server handler
 	parent *NetListener
 
@@ -92,19 +95,21 @@ func NewNetConnection(
 	uri string, log *Logger, opts Options) (*NetConnection, error) {
 	var err error
 	nc := &NetConnection{
-		BaseConnection:    new_base_connection(uri, log, opts),
-		ConnectTimeout:    DEFAULT_CONNECTTIMEOUT,
-		KeepAliveInterval: DEFAULT_KEEPALIVEINTERVAL,
+		baseConnection:    new_base_connection(uri, log, opts),
+		ConnectTimeout:    NET_CONNECT_TIMEOUT,
+		KeepAliveInterval: NET_KEEPALIVE_INTERVAL,
 	}
 	nc.network, nc.address, err = parse_net_uri(uri)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w%s", ErrError, err)
 	}
 	if opts != nil {
-		nc.ConnectTimeout = opts.GetFloat64(
-			"connect_timeout", DEFAULT_CONNECTTIMEOUT)
-		nc.KeepAliveInterval = opts.GetFloat64(
-			"keepalive_interval", DEFAULT_KEEPALIVEINTERVAL)
+		if v := opts.GetFloat64("connect_timeout", 0); v >= 0 {
+			nc.ConnectTimeout = v
+		}
+		if v := opts.GetFloat64("keepalive_interval", 0); v >= 0 {
+			nc.KeepAliveInterval = v
+		}
 	}
 	return nc, nil
 }
@@ -123,12 +128,19 @@ func (nc *NetConnection) IsOpened() bool {
 
 // Opens the socket connection
 func (nc *NetConnection) Open() error {
-	nc.Close()
+	if !nc.op_mux.TryLock() {
+		return nil
+	}
+	defer nc.op_mux.Unlock()
 
 	nc.evtBreak.Clear()
 	nc.evtKill.Clear()
 
-	nc.log("OPEN -- %s", nc.uri)
+	if nc.uriLogging {
+		nc.comm_log("CONNECT")
+	} else {
+		nc.comm_log("OPEN -- %s", nc.uri)
+	}
 
 	var err error
 	var ctx context.Context
@@ -141,17 +153,17 @@ func (nc *NetConnection) Open() error {
 	if ctx.Err() != nil {
 		return ErrBreak
 	} else if err != nil {
-		return fmt.Errorf("%w, %s", ErrOpen, err.Error())
+		return fmt.Errorf("%w, %s", ErrConnection, err)
 	}
 
 	if tcpConn, ok := nc.sock.(*net.TCPConn); ok &&
 		nc.KeepAliveInterval > 0 && runtime.GOOS != "windows" {
 		if err := tcpConn.SetKeepAlive(true); err != nil {
-			return fmt.Errorf("%w, %s", ErrOpen, err.Error())
+			return fmt.Errorf("%w, %s", ErrConnection, err)
 		}
 		if err := tcpConn.SetKeepAlivePeriod(
 			time.Duration(nc.KeepAliveInterval * 1000000000)); err != nil {
-			return fmt.Errorf("%w, %s", ErrOpen, err.Error())
+			return fmt.Errorf("%w, %s", ErrConnection, err)
 		}
 		nc.sock = tcpConn
 	}
@@ -161,12 +173,19 @@ func (nc *NetConnection) Open() error {
 
 // Closes the socket connection
 func (nc *NetConnection) Close() {
+	nc.op_mux.Lock()
+	defer nc.op_mux.Unlock()
+
 	nc.evtKill.Set()
 	if nc.sock != nil {
 		nc.sock.Close()
-		nc.log("CLOSE -- %s", nc.uri)
+		nc.sock = nil
+		if nc.uriLogging {
+			nc.comm_log("DISCONNECT")
+		} else {
+			nc.comm_log("CLOSE -- %s", nc.uri)
+		}
 	}
-	nc.sock = nil
 }
 
 // cancel blocking operations
@@ -184,16 +203,17 @@ func (nc *NetConnection) Send(data []byte) error {
 		return fmt.Errorf("%w, empty data", ErrError)
 	}
 	if !nc.IsOpened() {
-		return ErrNotOpend
+		return ErrClosed
 	}
-	nc.txLog(data)
+	nc.tx_Log(data)
 	_, err := nc.sock.Write(data)
 	if err != nil {
 		if errIsClosed(err) {
+			nc.comm_log("SOCK_CLOSED - %s", err.Error())
 			nc.Close()
 			return ErrClosed
 		}
-		return fmt.Errorf("%w, %s", ErrWrite, err.Error())
+		return fmt.Errorf("%w, %s", ErrWrite, err)
 	}
 	return nil
 }
@@ -201,34 +221,35 @@ func (nc *NetConnection) Send(data []byte) error {
 // Recv data from the socket connection
 func (nc *NetConnection) Recv() ([]byte, error) {
 	if !nc.IsOpened() {
-		return nil, ErrNotOpend
+		return nil, ErrClosed
 	}
 
 	data := []byte(nil)
+	td := time.Duration(nc.PollInterval * 1000000000)
 	for {
 		b := make([]byte, nc.PollChunkSize)
-
-		nc.sock.SetReadDeadline(
-			time.Now().Add(time.Duration(nc.PollInterval * 1000000000)))
-
+		if td > 0 {
+			nc.sock.SetReadDeadline(time.Now().Add(td))
+		}
 		n, err := nc.sock.Read(b)
 		if err != nil {
 			if errIsClosed(err) {
-				nc.rxLog(data)
+				nc.rx_Log(data)
+				nc.comm_log("SOCK_CLOSED - %s", err.Error())
 				nc.Close()
 				return nil, ErrClosed
 			}
 			if err, ok := err.(net.Error); ok && err.Timeout() {
 				break
 			}
-			return nil, fmt.Errorf("%w, %s", ErrRead, err.Error())
+			return nil, fmt.Errorf("%w, %s", ErrRead, err)
 		}
 		if n > 0 {
 			data = append(data, b[:n]...)
+			if n < nc.PollChunkSize {
+				break
+			}
 		} else {
-			break
-		}
-		if data != nil && n < nc.PollChunkSize {
 			break
 		}
 
@@ -236,16 +257,16 @@ func (nc *NetConnection) Recv() ([]byte, error) {
 			break
 		}
 
-		if nc.evtKill.IsSet() {
-			nc.rxLog(data)
+		if nc.evtKill.IsSet() || (nc.parent != nil && !nc.parent.IsActive()) {
+			nc.rx_Log(data)
 			return nil, ErrClosed
 		}
 		if nc.evtBreak.IsSet() {
-			nc.rxLog(data)
+			nc.rx_Log(data)
 			return nil, ErrBreak
 		}
 	}
-	nc.rxLog(data)
+	nc.rx_Log(data)
 	return data, nil
 }
 
@@ -260,7 +281,7 @@ func (nc *NetConnection) RecvWait(timeout float64) ([]byte, error) {
 		} else if len(data) > 0 {
 			return data, nil
 		}
-		if nc.evtKill.IsSet() {
+		if nc.evtKill.IsSet() || (nc.parent != nil && !nc.parent.IsActive()) {
 			return nil, ErrClosed
 		}
 		if nc.evtBreak.IsSet() {
@@ -276,44 +297,47 @@ func (nc *NetConnection) RecvWait(timeout float64) ([]byte, error) {
 
 // Network Listener
 type NetListener struct {
-	*BaseConnection
+	*baseConnection
 
+	// connection attrs
 	network string
 	address string
 
 	// low level network listener handler
 	sock net.Listener
-
+	// operation sync wait group
+	op_wg sync.WaitGroup
 	// callback connection handler function
 	connHandler func(Connection)
 
-	// max number for connected clients
-	ListenerPool int
+	// limit simultaneous connections, 0 for unlimited
+	connLimit int
 }
 
 func NewNetListener(
 	uri string, log *Logger, opts Options) (*NetListener, error) {
 	var err error
 	nl := &NetListener{
-		BaseConnection: new_base_connection(uri, log, opts),
-		ListenerPool:   DEFAULT_LISTENERPOOL,
+		baseConnection: new_base_connection(uri, log, opts),
+		connLimit:      NET_CONNECTIONS_LIMIT,
 	}
 	nl.network, nl.address, err = parse_net_uri(uri)
 	if err != nil {
 		return nil, err
 	}
 	if opts != nil {
-		nl.ListenerPool = opts.GetInt("listener_pool", DEFAULT_LISTENERPOOL)
+		nl.connLimit = max(
+			0, opts.GetInt("connections_limit", NET_CONNECTIONS_LIMIT))
 	}
 	return nl, nil
 }
 
-func (nc *NetListener) NetHandler() net.Listener {
-	return nc.sock
+func (nl *NetListener) NetHandler() net.Listener {
+	return nl.sock
 }
 
-func (nl *NetListener) SetConnHandler(f func(Connection)) {
-	nl.connHandler = f
+func (nl *NetListener) SetConnHandler(h func(Connection)) {
+	nl.connHandler = h
 }
 
 func (nl *NetListener) IsActive() bool {
@@ -322,53 +346,67 @@ func (nl *NetListener) IsActive() bool {
 
 func (nl *NetListener) Start() error {
 	if nl.connHandler == nil {
-		return fmt.Errorf("%w, connection handler not set", ErrOpen)
+		return fmt.Errorf("%wconnection handler not set", ErrError)
 	}
-
-	nl.Stop()
 
 	nl.evtBreak.Clear()
 	nl.evtKill.Clear()
 
-	nl.log("LISTEN -- %s", nl.uri)
+	nl.comm_log("LISTEN -- %s", nl.uri)
 
 	var err error
 	nl.sock, err = net.Listen(nl.network, nl.address)
 	if err != nil {
-		return fmt.Errorf("%w, %s", ErrOpen, err.Error())
+		return fmt.Errorf("%w%s", ErrError, err)
+	}
+	// set connections limit
+	if nl.connLimit > 0 {
+		nl.sock = netutil.LimitListener(nl.sock, nl.connLimit)
 	}
 
-	nl.run()
-	return nil
-}
-
-func (nl *NetListener) run() {
+	// run forever
 	for nl.IsActive() {
 		nc_sock, err := nl.sock.Accept()
 		if err != nil {
-			nl.log("TRACE -- %s", err.Error())
-			continue
+			if nl.IsActive() {
+				nl.comm_log("CONN_ERROR -- %s", err.Error())
+				continue
+			} else {
+				break
+			}
 		}
 
 		nc_uri := fmt.Sprintf("%s@%s", nl.network, nc_sock.RemoteAddr())
-		nc, err := NewNetConnection(nc_uri, nl.Log, nil)
+		nc, err := NewNetConnection(nc_uri, nl.commLogger, nil)
+		if err != nil {
+			nl.comm_log("CONN_ERROR -- %s", err.Error())
+			continue
+		}
 		nc.sock = nc_sock
 		nc.parent = nl
 		nc.uriLogging = true
-		if err != nil {
-			nl.log("TRACE -- %s", err.Error())
-			continue
-		}
-		nl.log("NEWCONN -- %s", nc_uri)
-		nl.connHandler(nc)
+		nc.comm_log("CONNECT")
+
+		nl.op_wg.Add(1)
+		go func() {
+			defer nl.op_wg.Done()
+			defer nc.Close()
+			nl.connHandler(nc)
+		}()
 	}
+
+	nl.op_wg.Wait()
+	nl.comm_log("CLOSED -- %s", nl.uri)
+	return nil
 }
 
 func (nl *NetListener) Stop() {
+	nl.op_mux.Lock()
+	defer nl.op_mux.Unlock()
+
 	nl.evtKill.Set()
 	if nl.sock != nil {
 		nl.sock.Close()
-		nl.log("CLOSE -- %s", nl.uri)
+		nl.sock = nil
 	}
-	nl.sock = nil
 }
