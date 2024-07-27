@@ -72,6 +72,20 @@ func (l *Logger) ChildLogger(name string) *Logger {
 	}
 }
 
+func (l *Logger) SubLogger(prefix string) *Logger {
+	return &Logger{
+		Name:   l.Name,
+		parent: l,
+		Level:  l.Level,
+		formatter: &Formatter{
+			MsgPrefix:    prefix,
+			RecordFormat: l.formatter.RecordFormat,
+			TimeFormat:   l.formatter.TimeFormat,
+			EscapeMsg:    l.formatter.EscapeMsg,
+		},
+	}
+}
+
 func (l *Logger) SetFormatter(f *Formatter) {
 	if f != nil {
 		l.formatter = f

@@ -7,6 +7,7 @@ import (
 )
 
 type Formatter struct {
+	MsgPrefix    string
 	RecordFormat string
 	TimeFormat   string
 	EscapeMsg    bool
@@ -24,7 +25,7 @@ func (f *Formatter) Emit(
 		t = now.Format(f.TimeFormat)
 	}
 
-	m := fmt.Sprintf(msg, args...)
+	m := fmt.Sprintf(f.MsgPrefix+msg, args...)
 	if f.EscapeMsg {
 		m = strings.ReplaceAll(m, `\`, `\\`)
 		m = strings.ReplaceAll(m, `"`, `\"`)
