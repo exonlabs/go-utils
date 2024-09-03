@@ -7,7 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime/debug"
-	"slices"
+	"sort"
 	"strings"
 	"sync/atomic"
 	"syscall"
@@ -68,7 +68,7 @@ func (rm *RtManager) HandleCommand(cmd string) string {
 
 	case "LIST_WORKERS":
 		workers := rm.ListRoutines()
-		slices.Sort(workers)
+		sort.Strings(workers)
 		res := strings.Join(workers, ",")
 		if len(res) > 0 {
 			return res

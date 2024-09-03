@@ -2,9 +2,16 @@ package xnum
 
 const maxUint64 = 1<<64 - 1
 
+func _min(x, y int) int {
+	if y < x {
+		return y
+	}
+	return x
+}
+
 // convert big-endian bytes buffer into uint
 func U64(buffer []byte) uint64 {
-	size := min(len(buffer), 8)
+	size := _min(len(buffer), 8)
 	if size == 0 {
 		return 0
 	}
@@ -15,13 +22,13 @@ func U64(buffer []byte) uint64 {
 	return val
 }
 func U32(buffer []byte) uint32 {
-	return uint32(U64(buffer[:min(len(buffer), 4)]))
+	return uint32(U64(buffer[:_min(len(buffer), 4)]))
 }
 func U16(buffer []byte) uint16 {
-	return uint16(U64(buffer[:min(len(buffer), 2)]))
+	return uint16(U64(buffer[:_min(len(buffer), 2)]))
 }
 func U8(buffer []byte) uint8 {
-	return uint8(U64(buffer[:min(len(buffer), 1)]))
+	return uint8(U64(buffer[:_min(len(buffer), 1)]))
 }
 
 // convert uint into big-endian bytes buffer
@@ -45,7 +52,7 @@ func B1(val uint8) []byte {
 
 // convert big-endian bytes buffer into int
 func I64(buffer []byte) int64 {
-	size := min(len(buffer), 8)
+	size := _min(len(buffer), 8)
 	if size == 0 {
 		return 0
 	}
@@ -62,13 +69,13 @@ func I64(buffer []byte) int64 {
 	return int64(v)
 }
 func I32(buffer []byte) int32 {
-	return int32(I64(buffer[:min(len(buffer), 4)]))
+	return int32(I64(buffer[:_min(len(buffer), 4)]))
 }
 func I16(buffer []byte) int16 {
-	return int16(I64(buffer[:min(len(buffer), 2)]))
+	return int16(I64(buffer[:_min(len(buffer), 2)]))
 }
 func I8(buffer []byte) int8 {
-	return int8(I64(buffer[:min(len(buffer), 1)]))
+	return int8(I64(buffer[:_min(len(buffer), 1)]))
 }
 
 // convert int into big-endian bytes buffer

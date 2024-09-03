@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/gob"
 	"reflect"
-	"slices"
+	"sort"
 	"strings"
 )
 
@@ -159,7 +159,7 @@ func (d NDict) _keys(lvl int) []string {
 func (d NDict) Keys() []string {
 	keys := d._keys(-1)
 	if len(keys) > 0 {
-		slices.Sort(keys)
+		sort.Strings(keys)
 	}
 	return keys
 }
@@ -168,7 +168,7 @@ func (d NDict) Keys() []string {
 func (d NDict) KeysN(lvl int) []string {
 	keys := d._keys(lvl)
 	if len(keys) > 0 {
-		slices.Sort(keys)
+		sort.Strings(keys)
 	}
 	return keys
 }

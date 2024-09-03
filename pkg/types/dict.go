@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/gob"
 	"reflect"
-	"slices"
+	"sort"
 )
 
 // Simple Dict type
@@ -139,7 +139,7 @@ func (d Dict) Keys() []string {
 		keys = append(keys, k)
 	}
 	if len(keys) > 0 {
-		slices.Sort(keys)
+		sort.Strings(keys)
 	}
 	return keys
 }

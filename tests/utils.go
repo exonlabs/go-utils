@@ -2,7 +2,6 @@ package tests
 
 import (
 	"fmt"
-	"slices"
 )
 
 func GreenText(msg string) string {
@@ -21,11 +20,18 @@ func FailMsg() string {
 	return RedText("FAILED")
 }
 
+// Reverse reverses the elements of the slice in place.
+func Reverse[S ~[]E, E any](s S) {
+	for i, j := 0, len(s)-1; i < j; i, j = i+1, j-1 {
+		s[i], s[j] = s[j], s[i]
+	}
+}
+
 // Reverse the elements of the slice and return a copy
 func RevCopy[S ~[]T, T any](s S) S {
 	b := make([]T, len(s))
 	copy(b, s)
-	slices.Reverse(b)
+	Reverse(b)
 	return b
 }
 

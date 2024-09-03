@@ -1,6 +1,6 @@
 module github.com/exonlabs/go-utils
 
-go 1.23.0
+go 1.20
 
 // ignore old dev versions
 retract [v0.0.0, v0.2.9]

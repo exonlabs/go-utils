@@ -326,8 +326,7 @@ func NewNetListener(
 		return nil, err
 	}
 	if opts != nil {
-		nl.connLimit = max(
-			0, opts.GetInt("connections_limit", NET_CONNECTIONS_LIMIT))
+		nl.connLimit = opts.GetInt("connections_limit", NET_CONNECTIONS_LIMIT)
 	}
 	return nl, nil
 }

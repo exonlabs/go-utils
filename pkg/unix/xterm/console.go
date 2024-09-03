@@ -6,7 +6,6 @@ import (
 	"os"
 	"regexp"
 	"runtime"
-	"slices"
 	"strconv"
 	"strings"
 
@@ -246,8 +245,10 @@ func (con *Console) SelectValue(
 	msg string, values []string, defval any) (string, error) {
 	msg += fmt.Sprintf(" {%v}", strings.Join(values, "|"))
 	pr := func(input string) (any, error) {
-		if slices.Contains(values, input) {
-			return input, nil
+		for i := range values {
+			if input == values[i] {
+				return input, nil
+			}
 		}
 		return "", fmt.Errorf("invalid value")
 	}
