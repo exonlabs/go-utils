@@ -1,3 +1,3 @@
-# go-utils #
+# Go-Utils
 
-General utilities and helpers for GO.
+The go-utils module provides multiple packages for common stuff needed in application delevlopment.

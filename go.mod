@@ -1,5 +1,7 @@
 module github.com/exonlabs/go-utils
 
+// version = "0.4.0.dev"
+
 go 1.20
 
 // ignore old dev versions
