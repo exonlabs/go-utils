@@ -1,3 +1,7 @@
+// Copyright (c) 2024 ExonLabs, All rights reserved.
+// Use of this source code is governed by a BSD 3-Clause
+// license that can be found in the LICENSE file.
+
 package xlog
 
 import (
@@ -6,6 +10,9 @@ import (
 	"time"
 )
 
+// A Formatter handler formats the log record structure. it controls the
+// record format fields "time", "level", "source" and "message".
+// also a msg prefix can be added to each logged message.
 type Formatter struct {
 	MsgPrefix    string
 	RecordFormat string
@@ -13,9 +20,8 @@ type Formatter struct {
 	EscapeMsg    bool
 }
 
-// generate new formatted log record
-func (f *Formatter) Emit(
-	lvl Level, src string, msg string, args ...any) string {
+// Emit generates a formatted log record message
+func (f *Formatter) Emit(lvl Level, src, msg string, args ...any) string {
 	now := time.Now().Local()
 
 	var t string
@@ -39,56 +45,56 @@ func (f *Formatter) Emit(
 	).Replace(f.RecordFormat)
 }
 
-// standard text formatted log record
-func StdFormatter() *Formatter {
+// Standard text formatted log record
+func NewStdFormatter() *Formatter {
 	return &Formatter{
 		RecordFormat: "{time} {level} [{source}] {message}",
 		TimeFormat:   "2006-01-02 15:04:05.000000",
 	}
 }
 
-// simple text formatted log record, without source
-func SimpleFormatter() *Formatter {
+// Simple text formatted log record, without source
+func NewSimpleFormatter() *Formatter {
 	return &Formatter{
 		RecordFormat: "{time} {level} {message}",
 		TimeFormat:   "2006-01-02 15:04:05.000000",
 	}
 }
 
-// basic text formatted log record, just timestamp and message
-func BasicFormatter() *Formatter {
+// Basic text formatted log record, just timestamp and message
+func NewBasicFormatter() *Formatter {
 	return &Formatter{
 		RecordFormat: "{time} {message}",
 		TimeFormat:   "2006-01-02 15:04:05.000000",
 	}
 }
 
-// raw text formatted log record, just the message
-func RawFormatter() *Formatter {
+// Raw text formatted log record, just the message
+func NewRawFormatter() *Formatter {
 	return &Formatter{
 		RecordFormat: "{message}",
 		TimeFormat:   "",
 	}
 }
 
-// customized message text formatter
-func CustomMsgFormatter(recFmt string) *Formatter {
+// Customized message text formatter
+func NewCustomMsgFormatter(recFmt string) *Formatter {
 	return &Formatter{
 		RecordFormat: recFmt,
 		TimeFormat:   "2006-01-02 15:04:05.000000",
 	}
 }
 
-// customized timestamp text formatter
-func CustomTimeFormatter(tsFmt string) *Formatter {
+// Custom timestamp text formatter
+func NewCustomTimeFormatter(tsFmt string) *Formatter {
 	return &Formatter{
 		RecordFormat: "{time} {level} {message}",
 		TimeFormat:   tsFmt,
 	}
 }
 
-// standard json formatted log record
-func JsonFormatter() *Formatter {
+// Json formatted log record.
+func NewJsonFormatter() *Formatter {
 	return &Formatter{
 		RecordFormat: `{"ts":"{time}","lvl":"{level}",` +
 			`"src":"{source}","msg":"{message}"}`,
