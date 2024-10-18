@@ -1,0 +1,1 @@
+This package provides event implementation for multiple routines communication.

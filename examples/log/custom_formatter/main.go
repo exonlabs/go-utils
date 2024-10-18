@@ -16,7 +16,6 @@ func log_messages(logger *xlog.Logger) {
 	logger.Trace1("logging message type: %s", "trace1")
 	logger.Trace2("logging message type: %s", "trace2")
 	logger.Trace3("logging message type: %s", "trace3")
-	logger.Trace4("logging message type: %s", "trace4")
 }
 
 var formatter1 = &xlog.Formatter{

@@ -16,7 +16,6 @@ func log_messages(logger *xlog.Logger) {
 	logger.Trace1("logging message type: %s", "trace1")
 	logger.Trace2("logging message type: %s", "trace2")
 	logger.Trace3("logging message type: %s", "trace3")
-	logger.Trace4("logging message type: %s", "trace4")
 }
 
 func main() {
@@ -32,7 +31,7 @@ func main() {
 
 	// adjust formatters
 	fmt.Println("\n-- logging without source formatter --")
-	logger.SetFormatter(xlog.SimpleFormatter())
+	logger.SetFormatter(xlog.NewSimpleFormatter())
 
 	fmt.Println("\n* logging level: ERROR")
 	logger.Level = xlog.ERROR
@@ -48,8 +47,8 @@ func main() {
 
 	// adjust formatters
 	fmt.Println("\n-- logging json formatter --")
-	logger.SetFormatter(xlog.JsonFormatter())
-	logger.Level = xlog.TRACE4
+	logger.SetFormatter(xlog.NewJsonFormatter())
+	logger.Level = xlog.TRACE3
 	log_messages(logger)
 
 	fmt.Println()

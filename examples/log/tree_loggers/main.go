@@ -9,7 +9,7 @@ import (
 func main() {
 	logger := xlog.NewStdoutLogger("main")
 	logger.Level = xlog.DEBUG
-	logger.SetFormatter(xlog.CustomMsgFormatter(
+	logger.SetFormatter(xlog.NewCustomMsgFormatter(
 		"{time} {level} [{source}] -- root handler, {message}"))
 
 	fmt.Println("\n* logging parent logger:", logger.Name)
@@ -25,7 +25,7 @@ func main() {
 
 	log2 := logger.ChildLogger("child2")
 	log2.Level = xlog.WARN
-	log2.SetFormatter(xlog.CustomMsgFormatter(
+	log2.SetFormatter(xlog.NewCustomMsgFormatter(
 		"{time} {level} ----- child2 handler, {message}"))
 	fmt.Println("\n* logging child 2 logger (+handlers):", log2.Name)
 	logger.Warn("logging root message type: %s", "warn")
