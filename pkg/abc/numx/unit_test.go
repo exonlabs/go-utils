@@ -1,12 +1,16 @@
-package xnum_test
+// Copyright (c) 2024 ExonLabs, All rights reserved.
+// Use of this source code is governed by a BSD 3-Clause
+// license that can be found in the LICENSE file.
+
+package numx_test
 
 import (
 	"bytes"
 	"encoding/hex"
 	"testing"
 
-	"github.com/exonlabs/go-utils/pkg/conv/xnum"
-	"github.com/exonlabs/go-utils/tests"
+	"github.com/exonlabs/go-utils/pkg/abc/numx"
+	"github.com/exonlabs/go-utils/pkg/abc/slicex"
 )
 
 // convert byte buffer to numeric then back to bytes
@@ -16,19 +20,19 @@ func num_convert(b []byte, signed bool, ltendian bool) (any, []byte) {
 	l := len(b)
 	if ltendian {
 		if signed {
-			n = xnum.I64(tests.RevCopy(b))
-			v = tests.RevCopy(xnum.Q8(n.(int64)))[:l]
+			n = numx.I64(slicex.ReverseCopy(b))
+			v = slicex.ReverseCopy(numx.Q8(n.(int64)))[:l]
 		} else {
-			n = xnum.U64(tests.RevCopy(b))
-			v = tests.RevCopy(xnum.B8(n.(uint64)))[:l]
+			n = numx.U64(slicex.ReverseCopy(b))
+			v = slicex.ReverseCopy(numx.B8(n.(uint64)))[:l]
 		}
 	} else {
 		if signed {
-			n = xnum.I64(b)
-			v = xnum.Q8(n.(int64))[8-l:]
+			n = numx.I64(b)
+			v = numx.Q8(n.(int64))[8-l:]
 		} else {
-			n = xnum.U64(b)
-			v = xnum.B8(n.(uint64))[8-l:]
+			n = numx.U64(b)
+			v = numx.B8(n.(uint64))[8-l:]
 		}
 	}
 	return n, v
@@ -41,9 +45,9 @@ func TestSmallValues_Unsigned(t *testing.T) {
 		t.Logf("input: %v ---> %v %v\n",
 			hex.EncodeToString(b_in), num, hex.EncodeToString(b_out))
 		if bytes.Equal(b_in, b_out) {
-			t.Logf(tests.ValidMsg())
+			t.Logf("VALID")
 		} else {
-			t.Errorf(tests.FailMsg())
+			t.Errorf("FAILED")
 		}
 	}
 }
@@ -55,9 +59,9 @@ func TestSmallValues_Signed(t *testing.T) {
 		t.Logf("input: %v ---> %v %v\n",
 			hex.EncodeToString(b_in), num, hex.EncodeToString(b_out))
 		if bytes.Equal(b_in, b_out) {
-			t.Logf(tests.ValidMsg())
+			t.Logf("VALID")
 		} else {
-			t.Errorf(tests.FailMsg())
+			t.Errorf("FAILED")
 		}
 	}
 }
@@ -69,9 +73,9 @@ func TestLimitValues_Unsigned(t *testing.T) {
 		t.Logf("input: %v ---> %v %v\n",
 			hex.EncodeToString(b_in), num, hex.EncodeToString(b_out))
 		if bytes.Equal(b_in, b_out) {
-			t.Logf(tests.ValidMsg())
+			t.Logf("VALID")
 		} else {
-			t.Errorf(tests.FailMsg())
+			t.Errorf("FAILED")
 		}
 	}
 }
@@ -83,9 +87,9 @@ func TestLimitValues_Signed(t *testing.T) {
 		t.Logf("input: %v ---> %v %v\n",
 			hex.EncodeToString(b_in), num, hex.EncodeToString(b_out))
 		if bytes.Equal(b_in, b_out) {
-			t.Logf(tests.ValidMsg())
+			t.Logf("VALID")
 		} else {
-			t.Errorf(tests.FailMsg())
+			t.Errorf("FAILED")
 		}
 	}
 }
@@ -97,9 +101,9 @@ func TestMSB00_Unsigned(t *testing.T) {
 		t.Logf("input: %v ---> %v %v\n",
 			hex.EncodeToString(b_in), num, hex.EncodeToString(b_out))
 		if bytes.Equal(b_in, b_out) {
-			t.Logf(tests.ValidMsg())
+			t.Logf("VALID")
 		} else {
-			t.Errorf(tests.FailMsg())
+			t.Errorf("FAILED")
 		}
 	}
 }
@@ -111,9 +115,9 @@ func TestMSB00_Signed(t *testing.T) {
 		t.Logf("input: %v ---> %v %v\n",
 			hex.EncodeToString(b_in), num, hex.EncodeToString(b_out))
 		if bytes.Equal(b_in, b_out) {
-			t.Logf(tests.ValidMsg())
+			t.Logf("VALID")
 		} else {
-			t.Errorf(tests.FailMsg())
+			t.Errorf("FAILED")
 		}
 	}
 }
@@ -125,9 +129,9 @@ func TestMSBFF_Unsigned(t *testing.T) {
 		t.Logf("input: %v ---> %v %v\n",
 			hex.EncodeToString(b_in), num, hex.EncodeToString(b_out))
 		if bytes.Equal(b_in, b_out) {
-			t.Logf(tests.ValidMsg())
+			t.Logf("VALID")
 		} else {
-			t.Errorf(tests.FailMsg())
+			t.Errorf("FAILED")
 		}
 	}
 }
@@ -139,9 +143,9 @@ func TestMSBFF_Signed(t *testing.T) {
 		t.Logf("input: %v ---> %v %v\n",
 			hex.EncodeToString(b_in), num, hex.EncodeToString(b_out))
 		if bytes.Equal(b_in, b_out) {
-			t.Logf(tests.ValidMsg())
+			t.Logf("VALID")
 		} else {
-			t.Errorf(tests.FailMsg())
+			t.Errorf("FAILED")
 		}
 	}
 }
@@ -153,9 +157,9 @@ func TestLittleEndianValues_Unsigned(t *testing.T) {
 		t.Logf("input: %v ---> %v %v\n",
 			hex.EncodeToString(b_in), num, hex.EncodeToString(b_out))
 		if bytes.Equal(b_in, b_out) {
-			t.Logf(tests.ValidMsg())
+			t.Logf("VALID")
 		} else {
-			t.Errorf(tests.FailMsg())
+			t.Errorf("FAILED")
 		}
 	}
 }
@@ -167,9 +171,9 @@ func TestLittleEndianValues_Signed(t *testing.T) {
 		t.Logf("input: %v ---> %v %v\n",
 			hex.EncodeToString(b_in), num, hex.EncodeToString(b_out))
 		if bytes.Equal(b_in, b_out) {
-			t.Logf(tests.ValidMsg())
+			t.Logf("VALID")
 		} else {
-			t.Errorf(tests.FailMsg())
+			t.Errorf("FAILED")
 		}
 	}
 }

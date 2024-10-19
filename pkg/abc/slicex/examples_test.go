@@ -1,0 +1,108 @@
+// Copyright (c) 2024 ExonLabs, All rights reserved.
+// Use of this source code is governed by a BSD 3-Clause
+// license that can be found in the LICENSE file.
+
+package slicex_test
+
+import (
+	"fmt"
+
+	"github.com/exonlabs/go-utils/pkg/abc/slicex"
+)
+
+func ExampleEqual() {
+	s1 := []string{"matching", "strings"}
+	s2 := []string{"matching", "strings"}
+	s3 := []string{"non", "matching", "strings"}
+	fmt.Println("s1 equal s2 -->", slicex.Equal(s1, s2))
+	fmt.Println("s1 equal s3 -->", slicex.Equal(s1, s3))
+
+	b1 := []byte{1, 2, 3}
+	b2 := []byte{1, 2, 3}
+	b3 := []byte{1, 2, 3, 4}
+	fmt.Println("b1 equal b2 -->", slicex.Equal(b1, b2))
+	fmt.Println("b1 equal b3 -->", slicex.Equal(b1, b3))
+
+	// Output:
+	// s1 equal s2 --> true
+	// s1 equal s3 --> false
+	// b1 equal b2 --> true
+	// b1 equal b3 --> false
+}
+
+func ExampleIndex() {
+	s1 := []string{"1", "2", "3", "3"}
+	s2 := []int{1, 2, 3, 3, 4, 4, 5}
+	s3 := []any{1, 2, "3", 3, 4, 4.0, false}
+
+	fmt.Println("s1 index of \"3\" -->", slicex.Index(s1, "3"))
+	fmt.Println("s1 index of \"3\" -->", slicex.Index(s1, "8"))
+
+	fmt.Println("s2 index of 4 -->", slicex.Index(s2, 4))
+	fmt.Println("s2 index of 8 -->", slicex.Index(s2, 8))
+
+	fmt.Println("s3 index of 3 -->", slicex.Index(s3, 3))
+	fmt.Println("s3 index of false -->", slicex.Index(s3, false))
+
+	// Output:
+	// s1 index of "3" --> 2
+	// s1 index of "3" --> -1
+	// s2 index of 4 --> 4
+	// s2 index of 8 --> -1
+	// s3 index of 3 --> 3
+	// s3 index of false --> 6
+}
+
+func ExampleReverse() {
+	s1 := []string{"1", "2", "3", "3"}
+	s2 := []any{1, 2, "3", 3, 4, 4.0, false}
+
+	fmt.Println("s1 =", s1)
+	slicex.Reverse(s1)
+	fmt.Println("s1 =", s1)
+
+	fmt.Println("s2 =", s2)
+	slicex.Reverse(s2)
+	fmt.Println("s2 =", s2)
+
+	// Output:
+	// s1 = [1 2 3 3]
+	// s1 = [3 3 2 1]
+	// s2 = [1 2 3 3 4 4 false]
+	// s2 = [false 4 4 3 3 2 1]
+}
+
+func ExampleReverseCopy() {
+	s1 := []string{"1", "2", "3", "3"}
+	s2 := []any{1, 2, "3", 3, 4, 4.0, false}
+
+	fmt.Println("s1 =", s1)
+	c1 := slicex.ReverseCopy(s1)
+	fmt.Println("s1 =", s1) // not changed
+	fmt.Println("c1 =", c1)
+
+	fmt.Println("s2 =", s2)
+	c2 := slicex.ReverseCopy(s2)
+	fmt.Println("s2 =", s2) // not changed
+	fmt.Println("c2 =", c2)
+
+	// Output:
+	// s1 = [1 2 3 3]
+	// s1 = [1 2 3 3]
+	// c1 = [3 3 2 1]
+	// s2 = [1 2 3 3 4 4 false]
+	// s2 = [1 2 3 3 4 4 false]
+	// c2 = [false 4 4 3 3 2 1]
+}
+
+func ExampleSplitN() {
+	s1 := []string{"1", "2", "3", "4", "5", "6", "7", "8"}
+	s2 := []any{"1", 2, 3.0, true, "a", -1, nil}
+
+	fmt.Println("split s1 n=3 -->", slicex.SplitN(s1, 3))
+	fmt.Println("split s2 n=2 -->", slicex.SplitN(s2, 2))
+
+	// Output:
+	// split s1 n=3 --> [[1 2 3] [4 5 6] [7 8]]
+	// split s2 n=2 --> [[1 2] [3 true] [a -1] [<nil>]]
+}

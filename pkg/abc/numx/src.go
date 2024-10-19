@@ -1,44 +1,55 @@
-package xnum
+// Copyright (c) 2024 ExonLabs, All rights reserved.
+// Use of this source code is governed by a BSD 3-Clause
+// license that can be found in the LICENSE file.
+
+package numx
 
 const maxUint64 = 1<<64 - 1
 
-func _min(x, y int) int {
-	if y < x {
-		return y
+// return minimum number of a and b
+func _min(a, b int) int {
+	if b < a {
+		return b
 	}
-	return x
+	return a
 }
 
-// convert big-endian bytes buffer into uint
-func U64(buffer []byte) uint64 {
-	size := _min(len(buffer), 8)
+// Convert big-endian bytes into uint64 number.
+func U64(b []byte) uint64 {
+	size := _min(len(b), 8)
 	if size == 0 {
 		return 0
 	}
 	val := uint64(0)
 	for i := 0; i < size; i++ {
-		val += uint64(buffer[i]) << (8 * (size - i - 1))
+		val += uint64(b[i]) << (8 * (size - i - 1))
 	}
 	return val
 }
-func U32(buffer []byte) uint32 {
-	return uint32(U64(buffer[:_min(len(buffer), 4)]))
-}
-func U16(buffer []byte) uint16 {
-	return uint16(U64(buffer[:_min(len(buffer), 2)]))
-}
-func U8(buffer []byte) uint8 {
-	return uint8(U64(buffer[:_min(len(buffer), 1)]))
+
+// Convert big-endian bytes into uint32 number.
+func U32(b []byte) uint32 {
+	return uint32(U64(b[:_min(len(b), 4)]))
 }
 
-// convert uint into big-endian bytes buffer
-func B8(val uint64) []byte {
-	// create byte buffer and fill in reverse order for big-endian
-	buffer := make([]byte, 8)
+// Convert big-endian bytes into uint16 number.
+func U16(b []byte) uint16 {
+	return uint16(U64(b[:_min(len(b), 2)]))
+}
+
+// Convert big-endian bytes into uint8 number.
+func U8(b []byte) uint8 {
+	return uint8(U64(b[:_min(len(b), 1)]))
+}
+
+// Convert uint64 number n into big-endian bytes format.
+func B8(n uint64) []byte {
+	// create byte b and fill in reverse order for big-endian
+	b := make([]byte, 8)
 	for i := 0; i < 8; i++ {
-		buffer[7-i] = byte(val >> (8 * i))
+		b[7-i] = byte(n >> (8 * i))
 	}
-	return buffer
+	return b
 }
 func B4(val uint32) []byte {
 	return B8(uint64(val))[4:]
