@@ -14,4 +14,7 @@ require (
 	golang.org/x/term v0.23.0
 )
 
-require github.com/creack/goselect v0.1.2 // indirect
+require (
+	github.com/creack/goselect v0.1.2 // indirect
+	github.com/stretchr/objx v0.5.2 // indirect
+)
