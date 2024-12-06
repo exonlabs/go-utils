@@ -1,3 +1,7 @@
+// Copyright (c) 2024 ExonLabs, All rights reserved.
+// Use of this source code is governed by a BSD 3-Clause
+// license that can be found in the LICENSE file.
+
 package main
 
 import (
@@ -5,117 +9,106 @@ import (
 	"os"
 	"strings"
 
-	"github.com/exonlabs/go-utils/pkg/unix/xterm"
+	"github.com/exonlabs/go-utils/pkg/console"
 )
 
 // represent results
-func print_val(value any, err error) {
+func printValue(value any, err error) {
 	if err != nil {
-		print_err(err)
+		printError(err)
 		return
 	}
 	val := fmt.Sprint(value)
 	if len(val) == 0 {
 		val = "<empty>"
 	}
-	fmt.Printf("  * Value: %v\n", val)
+	fmt.Printf("  * Value: %v\n\n", val)
 }
 
 // represent error or exit
-func print_err(err error) {
+func printError(err error) {
 	if strings.Contains(err.Error(), "EOF") {
 		fmt.Print("\n--exit--\n\n")
 		os.Exit(0)
 	}
-	fmt.Printf("Error: %v\n", err)
+	fmt.Printf("Error: %v\n\n", err)
 }
 
 func main() {
-	con := xterm.NewConsole()
+	con, _ := console.NewTermConsole()
+	defer con.Close()
 
 	fmt.Println()
-	print_val(con.Required().ReadValue("Enter required string", nil))
-	fmt.Println()
-	print_val(con.Required().ReadValue(
-		"Enter required string with default", "default val"))
 
-	fmt.Println()
-	print_val(con.ReadValue("Enter optional string", ""))
-	fmt.Println()
-	print_val(con.ReadValue(
-		"Enter optional string with default", "default val"))
+	printValue(con.Required().
+		ReadValue("Enter required string", ""))
+	printValue(con.Required().
+		ReadValue("Enter required string with default", "default val"))
 
-	fmt.Println()
-	print_val(con.Required().
-		Regex("^[a-zA-Z0-9_.-]+@[a-zA-Z0-9.-]+$").
-		ReadValue("[input validation] Enter email (user@domain)", nil))
+	printValue(con.
+		ReadValue("Enter optional string", ""))
+	printValue(con.
+		ReadValue("Enter optional string with default", "default val"))
 
-	fmt.Println()
-	print_val(con.Required().
-		Regex("^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}"+
-			"(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$").
-		ReadValue("[input validation] Enter IPv4 (x.x.x.x)", nil))
-
-	fmt.Println()
-	print_val(con.Hidden().ReadValue("Test hidden input text", ""))
-	fmt.Println()
-	print_val(con.Required().Hidden().
-		ReadValue("Test required hidden input", nil))
-	fmt.Println()
-	print_val(con.Hidden().
+	printValue(con.Hidden().
+		ReadValue("Test hidden input text", ""))
+	printValue(con.Required().Hidden().
+		ReadValue("Test required hidden input", ""))
+	printValue(con.Hidden().
 		ReadValue("Test hidden input with default", "default val"))
 
-	fmt.Println()
-	if res, err := con.Required().Hidden().ReadValue(
-		"[input with confirm] Enter password", nil); err != nil {
-		print_err(err)
+	if res, err := con.Required().Hidden().
+		ReadValue("Enter password", ""); err != nil {
+		printError(err)
 	} else {
 		if err := con.Required().Hidden().
 			ConfirmValue("Confirm password", res); err != nil {
-			print_err(err)
+			printError(err)
 		} else {
-			fmt.Printf("  * Password: %v\n", res)
+			fmt.Printf("  * Password: %v\n\n", res)
 		}
 	}
 
-	fmt.Println()
-	print_val(con.Required().ReadNumber("Enter required number", nil))
-	fmt.Println()
-	print_val(con.ReadNumber("Enter optional number", 1234))
-	fmt.Println()
-	print_val(con.Required().ReadNumberWLimit(
-		"Enter required number (-100 <= N <= 100)", nil, -100, 100))
-	fmt.Println()
-	print_val(con.Required().ReadNumberWLimit(
-		"Enter required number with default (-100 <= N <= 100)",
-		0, -100, 100))
+	printValue(con.Required().
+		Regex("^[a-zA-Z0-9_.-]+@[a-zA-Z0-9.-]+$").
+		ReadValue("Enter email (user@domain)", ""))
 
-	fmt.Println()
-	print_val(con.Required().ReadDecimal(
-		"Enter required decimal", 3, nil))
-	fmt.Println()
-	print_val(con.ReadDecimal("Enter optional decimal", 3, 1234))
-	fmt.Println()
-	print_val(con.Required().ReadDecimalWLimit(
-		"Enter required decimal (-10.55 <= N <= 10.88)",
-		2, nil, -10.55, 10.88))
-	fmt.Println()
-	print_val(con.Required().ReadDecimalWLimit(
-		"Enter required decimal with default (0 <= N <= 100)",
-		2, 20.0, 0, 100))
+	printValue(con.Required().
+		Regex("^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}"+
+			"(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$").
+		ReadValue("Enter IPv4 (x.x.x.x)", ""))
 
-	fmt.Println()
-	print_val(con.Required().SelectValue("Select from list",
-		[]string{"val1", "val2", "val3"}, nil))
-	fmt.Println()
-	print_val(con.Required().SelectValue(
-		"Select from list with default",
-		[]string{"val1", "val2", "val3"}, "val2"))
-	fmt.Println()
-	print_val(con.Required().SelectYesNo("Select Yes/No", nil))
-	fmt.Println()
-	print_val(con.Required().SelectYesNo(
-		"Select Yes/No with default", "n"))
+	printValue(con.Required().
+		ReadNumber("Enter required number", 0))
+	printValue(con.
+		ReadNumber("Enter optional number", 1234))
+	printValue(con.Required().
+		ReadNumber("Enter required number (-100 <= N <= 100)",
+			0, -100, 100))
+	printValue(con.
+		ReadNumber("Enter number with default (-100 <= N <= 100)",
+			0, -100, 100))
+
+	printValue(con.Required().
+		ReadDecimal("Enter required decimal", 3, 0))
+	printValue(con.
+		ReadDecimal("Enter optional decimal", 3, 1234))
+	printValue(con.Required().
+		ReadDecimal("Enter required decimal (-10.55 <= N <= 10.88)",
+			2, 0, -100.55, 100.88))
+	printValue(con.
+		ReadDecimal("Enter decimal with default (0 <= N <= 100)",
+			2, 20.0, 0, 100))
+
+	printValue(con.Required().
+		SelectValue("Select from list", []string{"val1", "val2", "val3"}, ""))
+	printValue(con.Required().
+		SelectValue("Select from list with default",
+			[]string{"val1", "val2", "val3"}, "val2"))
+	printValue(con.Required().
+		SelectYesNo("Select Yes/No", ""))
+	printValue(con.Required().
+		SelectYesNo("Select Yes/No with default", "n"))
 
 	fmt.Println()
 }
