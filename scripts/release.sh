@@ -1,13 +1,17 @@
 #!/bin/bash
 cd $(dirname $(readlink -f $0))/..
 
-VER_FILE=version
+COMMIT_FILE=go.mod
 
-VERSION=$(cat ${VER_FILE} |head -n 1 |xargs |sed 's|\.dev.*||g')
+VERSION=$(grep 'version = ' ${COMMIT_FILE} \
+    |head -n 1 |cut -d'"' -f2 |xargs |sed 's|\.dev.*||g')
 RELEASE_TAG=v${VERSION}
 
+NEW_VER=$(echo "${VERSION}" \
+    |awk -F. '{for(i=1;i<NF;i++){printf $i"."}{printf $NF+1".dev"}}')
 
-echo -e "\n* Releasing: ${VERSION}"
+
+echo -e "\n* Releasing: ${RELEASE_TAG}"
 
 # check previous versions tags
 if git tag |grep -wq "${RELEASE_TAG}" ;then
@@ -16,19 +20,17 @@ if git tag |grep -wq "${RELEASE_TAG}" ;then
 fi
 
 # adjust release version
-echo -e "${VERSION}" > ${VER_FILE}
+sed -i "s|version = .*|version = \"${VERSION}\"|g" ${COMMIT_FILE}
 
 # setting release tag
-git commit -m "Release '${VERSION}'" ${VER_FILE}
+git commit -m "Release '${VERSION}'" ${COMMIT_FILE}
 if ! git tag "${RELEASE_TAG}" ;then
-    echo -e "\n-- Error!! failed commit and adding tag '${RELEASE_TAG}'\n"
+    echo -e "\n-- Error!! failed adding tag '${RELEASE_TAG}'\n"
     exit 1
 fi
 
 # bump new version
-NEW_VER=$(echo "${VERSION}" \
-    |awk -F. '{for(i=1;i<NF;i++){printf $i"."}{printf $NF+1".dev"}}')
-echo -e "${NEW_VER}" > ${VER_FILE}
-git commit -m "Bump version to '${NEW_VER}'" ${VER_FILE}
+sed -i "s|version = .*|version = \"${NEW_VER}\"|g" ${COMMIT_FILE}
+git commit -m "Bump version to '${NEW_VER}'" ${COMMIT_FILE}
 
 echo -e "\n* Released: ${VERSION}\n"
