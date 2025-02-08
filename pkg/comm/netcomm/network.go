@@ -633,8 +633,8 @@ func (l *Listener) NetListener() any {
 	return l.netListener
 }
 
-// ConnectionHandler sets a callback function to handle connections.
-func (l *Listener) ConnectionHandler(h func(comm.Connection)) {
+// SetConnHandler sets a callback function to handle connections.
+func (l *Listener) SetConnHandler(h func(comm.Connection)) {
 	l.connectionHandler = h
 }
 

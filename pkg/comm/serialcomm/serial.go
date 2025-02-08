@@ -219,6 +219,38 @@ func (sc *Connection) Close() {
 	sc.isOpened.Store(false)
 }
 
+// Mode sets new mode for the serial port.
+// mode has the format `<baud>:<mode>` as defined for the URI.
+func (c *Connection) SetMode(mode string) error {
+	newUri := fmt.Sprintf("serial@%s:%s", c.port, mode)
+	_, newMode, err := ParseUri(newUri)
+	if err != nil {
+		return err
+	}
+
+	c.muState.Lock()
+	defer c.muState.Unlock()
+
+	// set new params
+	c.mode = newMode
+
+	// set dynamic polling time relative to baudrate.
+	// set to 10 bytes duration, where actual 1 byte = 10 bits
+	c.PollTimeout = gx.Max(0.02, 20.0/float64(newMode.BaudRate))
+
+	// apply new mode if port is already opened
+	if c.isOpened.Load() {
+		c.LogMsg("SETMODE -- %s", newUri)
+		if err := c.serialPort.SetMode(newMode); err != nil {
+			return fmt.Errorf("%w, %v", comm.ErrConnection, err)
+		}
+		c.serialPort.ResetInputBuffer()
+		c.serialPort.ResetOutputBuffer()
+	}
+
+	return nil
+}
+
 // Cancel interrupts the ongoing communication for this Connection.
 func (sc *Connection) Cancel() {
 	sc.breakReadEvent.Store(true)
@@ -409,8 +441,8 @@ func (l *Listener) SerialPort() serial.Port {
 	return l.serialConn.SerialPort()
 }
 
-// ConnectionHandler sets a callback function to handle connections.
-func (l *Listener) ConnectionHandler(h func(comm.Connection)) {
+// SetConnHandler sets a callback function to handle connections.
+func (l *Listener) SetConnHandler(h func(comm.Connection)) {
 	l.connectionHandler = h
 }
 

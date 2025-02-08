@@ -52,7 +52,7 @@ func NewProcessHandler(log *logging.Logger, tsk Tasklet) *Process {
 // enable command handling feature on process.
 func (h *Process) SetCmdHandler(l comm.Listener, f CommandHandler) {
 	if l != nil {
-		l.ConnectionHandler(h.handleConnection)
+		l.SetConnHandler(h.handleConnection)
 	}
 	h.cmdListener = l
 	h.cmdHandler = f

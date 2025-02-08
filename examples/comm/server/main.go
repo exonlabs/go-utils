@@ -185,7 +185,7 @@ func main() {
 		fmt.Printf("\nError: %s\n\n", err.Error())
 		return
 	}
-	srv.ConnectionHandler(HandleConnection)
+	srv.SetConnHandler(HandleConnection)
 
 	// register callback for close signals
 	sigCh := make(chan os.Signal, 1)

@@ -6,6 +6,9 @@ package comm
 
 // Connection represents a generic interface for handling client side connections.
 type Connection interface {
+	// Uri returns the URI of the connection.
+	Uri() string
+
 	// Type returns the type of the connection.
 	Type() string
 
@@ -45,6 +48,9 @@ type Connection interface {
 
 // Listener represents a generic interface for handling server side connections.
 type Listener interface {
+	// Uri returns the URI of the listener.
+	Uri() string
+
 	// Type returns the type of listener.
 	Type() string
 
@@ -57,6 +63,6 @@ type Listener interface {
 	// Stop terminates the listener and closes all connections.
 	Stop()
 
-	// ConnectionHandler sets a callback function to handle incoming connections.
-	ConnectionHandler(func(conn Connection))
+	// SetConnHandler sets a callback function to handle incoming connections.
+	SetConnHandler(handler func(conn Connection))
 }
