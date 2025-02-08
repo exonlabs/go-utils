@@ -128,6 +128,7 @@ func main() {
 	flag.Parse()
 
 	commLog := logging.NewStdoutLogger("comm")
+	commLog.SetFormatter(logging.RawFormatter)
 
 	// optional args
 	opts := dictx.Dict{

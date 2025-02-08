@@ -5,8 +5,6 @@
 package comm
 
 import (
-	"encoding/hex"
-	"fmt"
 	"strings"
 
 	"github.com/exonlabs/go-utils/pkg/abc/dictx"
@@ -49,11 +47,6 @@ type Context struct {
 //   - poll_maxsize: (int) the maximum size for read polling data.
 //     use 0 or negative value to disable max limit for read data polling.
 func NewContext(uri string, log *logging.Logger, opts dictx.Dict) *Context {
-	// adjust default communicatin logging format
-	if log != nil {
-		log.SetFormatter(logging.NewBasicFormatter())
-	}
-
 	ctx := &Context{
 		uri:           strings.TrimSpace(uri),
 		CommLog:       log,
@@ -102,11 +95,11 @@ func (c *Context) LogMsg(msg string, args ...any) {
 //	2006-01-02 15:04:05.000000 TX >> 0102030405060708090A0B0C0D0E0F
 func (c *Context) LogTx(data []byte, addr any) {
 	if c.CommLog != nil && len(data) > 0 {
-		msg := "TX >> " + strings.ToUpper(hex.EncodeToString(data))
 		if addr != nil {
-			msg = fmt.Sprintf("(%s) %s", addr, msg)
+			c.CommLog.Info("(%s) TX >> %X", addr, data)
+		} else {
+			c.CommLog.Info("TX >> %X", data)
 		}
-		c.CommLog.Info(msg)
 	}
 }
 
@@ -115,10 +108,10 @@ func (c *Context) LogTx(data []byte, addr any) {
 //	2006-01-02 15:04:05.000000 RX << 0102030405060708090A0B0C0D0E0F
 func (c *Context) LogRx(data []byte, addr any) {
 	if c.CommLog != nil && len(data) > 0 {
-		msg := "RX << " + strings.ToUpper(hex.EncodeToString(data))
 		if addr != nil {
-			msg = fmt.Sprintf("(%s) %s", addr, msg)
+			c.CommLog.Info("(%s) RX << %X", addr, data)
+		} else {
+			c.CommLog.Info("RX << %X", data)
 		}
-		c.CommLog.Info(msg)
 	}
 }

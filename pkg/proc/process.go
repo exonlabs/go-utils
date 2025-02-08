@@ -72,7 +72,7 @@ func (h *Process) handleSignal(sig os.Signal) {
 			stack := debug.Stack()
 			indx := bytes.Index(stack, []byte("panic({"))
 			h.Log.Error("%s", r)
-			h.Log.Trace1("\n----------\n%s----------", stack[indx:])
+			h.Log.Trace("\n----------\n%s----------", stack[indx:])
 		}
 	}()
 
@@ -92,7 +92,7 @@ func (h *Process) handleConnection(conn comm.Connection) {
 			stack := debug.Stack()
 			indx := bytes.Index(stack, []byte("panic({"))
 			h.Log.Error("%s", r)
-			h.Log.Trace1("\n----------\n%s----------", stack[indx:])
+			h.Log.Trace("\n----------\n%s----------", stack[indx:])
 		}
 	}()
 

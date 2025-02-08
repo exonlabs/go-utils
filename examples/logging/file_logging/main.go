@@ -20,9 +20,7 @@ func log_messages(logger *logging.Logger) {
 	logger.Warn("logging message type: %s", "warn")
 	logger.Info("logging message type: %s", "info")
 	logger.Debug("logging message type: %s", "debug")
-	logger.Trace1("logging message type: %s", "trace1")
-	logger.Trace2("logging message type: %s", "trace2")
-	logger.Trace3("logging message type: %s", "trace3")
+	logger.Trace("logging message type: %s", "trace")
 }
 
 func main() {

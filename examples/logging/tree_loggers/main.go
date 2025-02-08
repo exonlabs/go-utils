@@ -12,16 +12,15 @@ import (
 
 func main() {
 	logger := logging.NewStdoutLogger("main")
-	logger.Level = logging.DEBUG
-	logger.SetFormatter(logging.NewCustomMsgFormatter(
-		"{time} {level} [{source}] -- root handler, {message}"))
+	logger.Level = logging.INFO
+	logger.Prefix = "-- root handler -- "
 
-	fmt.Println("\n* logging parent logger:", logger.Name)
+	fmt.Println("\n* logging parent logger:")
 	logger.Warn("logging root message type: %s", "warn")
 	logger.Info("logging root message type: %s", "info")
 
 	log1 := logger.ChildLogger("child1")
-	fmt.Println("\n* logging child  logger:", log1.Name)
+	fmt.Println("\n* logging child1 logger:")
 	logger.Warn("logging root message type: %s", "warn")
 	log1.Warn("logging child 1 message type: %s", "warn")
 	logger.Info("logging root message type: %s", "info")
@@ -29,15 +28,17 @@ func main() {
 
 	log2 := logger.ChildLogger("child2")
 	log2.Level = logging.WARN
-	log2.SetFormatter(logging.NewCustomMsgFormatter(
-		"{time} {level} ----- child2 handler, {message}"))
-	fmt.Println("\n* logging child 2 logger (+handlers):", log2.Name)
+	log2.Prefix = "-- child2 -- "
+	log2.SetFormatter(logging.BasicFormatter)
+	log2.SetHandler(logging.NewStdoutHandler())
+
+	fmt.Println("\n* logging child2 logger level:WARN (+handlers):")
 	logger.Warn("logging root message type: %s", "warn")
 	log1.Warn("logging child 1 message type: %s", "warn")
-	log2.Warn("logging child 2 message type: %s", "warn")
+	log2.Warn("logging child 2 message type: %s (should print twice)", "warn")
 	logger.Info("logging root message type: %s", "info")
 	log1.Info("logging child 1 message type: %s", "info")
-	log2.Info("logging child 2 message type: %s", "info")
+	log2.Info("logging child 2 message type: %s", "info (should print once)")
 
 	fmt.Println()
 }

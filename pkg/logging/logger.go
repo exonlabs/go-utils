@@ -6,62 +6,60 @@ package logging
 
 import (
 	"errors"
+	"fmt"
+	"time"
 )
 
-// Level defines the severity of a log event.
-// Higher values indicate more severe log levels.
-type Level int
-
-// Predefined log levels.
 const (
-	TRACE3 Level = -4 // Trace level 3
-	TRACE2 Level = -3 // Trace level 2
-	TRACE1 Level = -2 // Trace level 1
-	DEBUG  Level = -1 // Debug level
-	INFO   Level = 0  // Info level
-	WARN   Level = 1  // Warning level
-	ERROR  Level = 2  // Error level
-	FATAL  Level = 3  // Fatal level
-	PANIC  Level = 4  // Panic level
+	// Predefined log levels.
+	TRACE = int(-2) // Trace level
+	DEBUG = int(-1) // Debug level
+	INFO  = int(0)  // Info level
+	WARN  = int(1)  // Warning level
+	ERROR = int(2)  // Error level
+	FATAL = int(3)  // Fatal level
+	PANIC = int(4)  // Panic level
 )
 
-// String returns the string representation of the log level.
-func (l Level) String() string {
+// LEVEL returns the string representation of the log level.
+func LEVEL(lvl int) string {
 	switch {
-	case l < DEBUG:
-		return "TRACE"
-	case l == DEBUG:
-		return "DEBUG"
-	case l == INFO:
-		return "INFO "
-	case l == WARN:
-		return "WARN "
-	case l == ERROR:
-		return "ERROR"
-	case l == FATAL:
-		return "FATAL"
-	default:
+	case lvl >= PANIC:
 		return "PANIC"
+	case lvl >= FATAL:
+		return "FATAL"
+	case lvl >= ERROR:
+		return "ERROR"
+	case lvl >= WARN:
+		return "WARN"
+	case lvl >= INFO:
+		return "INFO"
+	case lvl >= DEBUG:
+		return "DEBUG"
+	default:
+		return "TRACE"
 	}
 }
 
 // A Logger records structured information about each call to its methods.
-// For each call, it creates a new log message formatted with [Formatter]
-// and passes it to the logger handlers and to its parent logger.
+// For each call, it creates a new log record and passes it to the logger
+// handlers and to its parent logger.
 type Logger struct {
-	Name      string     // Logger name
-	Level     Level      // Logger level
-	parent    *Logger    // Parent logger for inheritance
-	formatter *Formatter // Formatter for log messages
-	handlers  []Handler  // Handlers for processing log records
+	name      string    // Logger name
+	Level     int       // Logger level
+	Prefix    string    // an optional prefix for all logger records
+	Suffix    string    // an optional suffix for all logger records
+	formatter Formatter // Formatter for generating log messages
+	handlers  []Handler // Handlers for processing log records
+	parent    *Logger   // Parent logger for inheritance
 }
 
 // NewStdoutLogger creates a new logger that outputs to standard output.
 func NewStdoutLogger(name string) *Logger {
 	return &Logger{
-		Name:      name,
+		name:      name,
 		Level:     INFO,
-		formatter: NewStdFormatter(),
+		formatter: StdFormatter,
 		handlers:  []Handler{NewStdoutHandler()},
 	}
 }
@@ -69,43 +67,63 @@ func NewStdoutLogger(name string) *Logger {
 // NewFileLogger creates a new logger that logs to a specified file.
 func NewFileLogger(name, path string) *Logger {
 	return &Logger{
-		Name:      name,
+		name:      name,
 		Level:     INFO,
-		formatter: NewStdFormatter(),
+		formatter: StdFormatter,
 		handlers:  []Handler{NewFileHandler(path)},
 	}
 }
 
-// ChildLogger creates new named child logger from parent logger.
-// child logger inherits the parent log [Level] and [Formatter].
+// ChildLogger creates new named child logger.
+// child logger inherits the parent logger [Formatter].
+//
+// Example:
+//
+//	2006-01-02 15:04:05.000000 INFO [child_name] log message
 func (l *Logger) ChildLogger(name string) *Logger {
 	return &Logger{
-		Name:      name,
 		parent:    l,
-		Level:     l.Level,
+		name:      name,
+		Level:     TRACE,
+		Prefix:    l.Prefix,
+		Suffix:    l.Suffix,
 		formatter: l.formatter,
 	}
 }
 
-// SubLogger creates a new child logger with an added prefix in its messages.
-func (l *Logger) SubLogger(prefix string) *Logger {
+// SubLogger creates a new child logger with name added between brackets before prefix.
+// child sub logger inherits the parent logger [Formatter].
+//
+// Example:
+//
+//	2006-01-02 15:04:05.000000 INFO [parent_name] (child_name) log message
+func (l *Logger) SubLogger(name string) *Logger {
 	return &Logger{
-		Name:   l.Name,
-		parent: l,
-		Level:  l.Level,
-		formatter: &Formatter{ // Inherits and modifies the formatter
-			MsgPrefix:    prefix,
-			RecordFormat: l.formatter.RecordFormat,
-			TimeFormat:   l.formatter.TimeFormat,
-			EscapeMsg:    l.formatter.EscapeMsg,
-		},
+		parent:    l,
+		name:      l.name,
+		Level:     TRACE,
+		Prefix:    fmt.Sprintf("(%s) %s", name, l.Prefix),
+		Suffix:    l.Suffix,
+		formatter: l.formatter,
 	}
 }
 
+// Name returns the logger name.
+func (l *Logger) Name() string {
+	return l.name
+}
+
 // SetFormatter sets a new formatter for the logger.
-func (l *Logger) SetFormatter(f *Formatter) {
+func (l *Logger) SetFormatter(f Formatter) {
 	if f != nil {
 		l.formatter = f
+	}
+}
+
+// SetHandler clears all handler and set new one to the logger.
+func (l *Logger) SetHandler(h Handler) {
+	if h != nil {
+		l.handlers = []Handler{h}
 	}
 }
 
@@ -121,92 +139,82 @@ func (l *Logger) ClearHandlers() {
 	l.handlers = nil
 }
 
-// log processes the log message and sends it to all attached handlers.
-func (l *Logger) log(r string) error {
+// Log handles a log message, sending it to all handlers and parents.
+func (l *Logger) Log(level int, msg string) error {
 	var errAll error
-	for _, h := range l.handlers {
-		if err := h.HandleRecord(r); err != nil {
-			// Combine errors
-			errAll = errors.Join(errAll, err)
+
+	// process record by local handlers
+	if level >= l.Level && l.handlers != nil {
+		for _, h := range l.handlers {
+			if err := h.HandleMessage(msg); err != nil {
+				// Combine errors
+				errAll = errors.Join(errAll, err)
+			}
 		}
 	}
+
 	// Propagate to parent logger
 	if l.parent != nil {
-		if err := l.parent.log(r); err != nil {
+		if err := l.parent.Log(level, msg); err != nil {
 			errAll = errors.Join(errAll, err)
 		}
 	}
+
 	return errAll
 }
 
-// Panic logs a message with Panic severity level.
+// Panic logs a record with Panic level.
 func (l *Logger) Panic(msg string, args ...any) error {
-	if l.Level <= PANIC {
-		return l.log(l.formatter.Emit(PANIC, l.Name, msg, args...))
-	}
-	return nil
+	return l.Log(PANIC, l.formatter(
+		time.Now().Local(), PANIC, l.name,
+		fmt.Sprintf(l.Prefix+msg+l.Suffix, args...),
+	))
 }
 
-// Fatal logs a message with Fatal severity level.
+// Fatal logs a record with Fatal level.
 func (l *Logger) Fatal(msg string, args ...any) error {
-	if l.Level <= FATAL {
-		return l.log(l.formatter.Emit(FATAL, l.Name, msg, args...))
-	}
-	return nil
+	return l.Log(FATAL, l.formatter(
+		time.Now().Local(), FATAL, l.name,
+		fmt.Sprintf(l.Prefix+msg+l.Suffix, args...),
+	))
 }
 
-// Error logs a message with Error severity level.
+// Error logs a record with Error level.
 func (l *Logger) Error(msg string, args ...any) error {
-	if l.Level <= ERROR {
-		return l.log(l.formatter.Emit(ERROR, l.Name, msg, args...))
-	}
-	return nil
+	return l.Log(ERROR, l.formatter(
+		time.Now().Local(), ERROR, l.name,
+		fmt.Sprintf(l.Prefix+msg+l.Suffix, args...),
+	))
 }
 
-// Warn logs a message with Warn severity level.
+// Warn logs a record with Warn level.
 func (l *Logger) Warn(msg string, args ...any) error {
-	if l.Level <= WARN {
-		return l.log(l.formatter.Emit(WARN, l.Name, msg, args...))
-	}
-	return nil
+	return l.Log(WARN, l.formatter(
+		time.Now().Local(), WARN, l.name,
+		fmt.Sprintf(l.Prefix+msg+l.Suffix, args...),
+	))
 }
 
-// Info logs a message with Info severity level.
+// Info logs a record with Info level.
 func (l *Logger) Info(msg string, args ...any) error {
-	if l.Level <= INFO {
-		return l.log(l.formatter.Emit(INFO, l.Name, msg, args...))
-	}
-	return nil
+	return l.Log(INFO, l.formatter(
+		time.Now().Local(), INFO, l.name,
+		fmt.Sprintf(l.Prefix+msg+l.Suffix, args...),
+	))
 }
 
-// Debug logs a message with Debug severity level.
+// Debug logs a record with Debug level.
 func (l *Logger) Debug(msg string, args ...any) error {
-	if l.Level <= DEBUG {
-		return l.log(l.formatter.Emit(DEBUG, l.Name, msg, args...))
-	}
-	return nil
+	return l.Log(DEBUG, l.formatter(
+		time.Now().Local(), DEBUG, l.name,
+		fmt.Sprintf(l.Prefix+msg+l.Suffix, args...),
+	))
 }
 
-// Trace1 logs a message with Trace1 severity level.
-func (l *Logger) Trace1(msg string, args ...any) error {
-	if l.Level <= TRACE1 {
-		return l.log(l.formatter.Emit(TRACE1, l.Name, msg, args...))
-	}
-	return nil
-}
-
-// Trace2 logs a message with Trace2 severity level.
-func (l *Logger) Trace2(msg string, args ...any) error {
-	if l.Level <= TRACE2 {
-		return l.log(l.formatter.Emit(TRACE2, l.Name, msg, args...))
-	}
-	return nil
-}
-
-// Trace3 logs a message with Trace3 severity level.
-func (l *Logger) Trace3(msg string, args ...any) error {
-	if l.Level <= TRACE3 {
-		return l.log(l.formatter.Emit(TRACE3, l.Name, msg, args...))
-	}
-	return nil
+// Trace logs a record with Trace level.
+func (l *Logger) Trace(msg string, args ...any) error {
+	return l.Log(TRACE, l.formatter(
+		time.Now().Local(), TRACE, l.name,
+		fmt.Sprintf(l.Prefix+msg+l.Suffix, args...),
+	))
 }

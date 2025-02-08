@@ -80,13 +80,19 @@ func (h *TaskletHandler) Disable() {
 // Run initiates the tasklet lifecycle, handling initialization,
 // execution, and termination.
 func (h *TaskletHandler) Run() {
+	// set default logger
+	if h.Log == nil {
+		h.Log = logging.NewStdoutLogger("tasklet")
+		h.Log.SetFormatter(logging.BasicFormatter)
+	}
+
 	defer func() {
 		// Panic recovery to handle unexpected errors during execution.
 		if r := recover(); r != nil {
 			stack := debug.Stack()
 			indx := bytes.Index(stack, []byte("panic({"))
 			h.Log.Error("%s", r)
-			h.Log.Trace1("\n----------\n%s----------", stack[indx:])
+			h.Log.Trace("\n----------\n%s----------", stack[indx:])
 		}
 		// Ensure termination execute if initialized and not killed.
 		if h.isInitialized.Load() && !h.KillEvent.IsSet() {

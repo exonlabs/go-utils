@@ -705,7 +705,7 @@ func (l *Listener) startListener() error {
 				return
 			}
 			if l.CommLog != nil {
-				nc.CommLog = l.CommLog.SubLogger(fmt.Sprintf("(%s) ", uri))
+				nc.CommLog = l.CommLog.SubLogger(uri)
 			}
 			nc.netConn = netConn
 			nc.parent = l

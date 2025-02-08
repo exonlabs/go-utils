@@ -17,25 +17,25 @@ func log_messages(logger *logging.Logger) {
 	logger.Warn("logging message type: %s", "warn")
 	logger.Info("logging message type: %s", "info")
 	logger.Debug("logging message type: %s", "debug")
-	logger.Trace1("logging message type: %s", "trace1")
-	logger.Trace2("logging message type: %s", "trace2")
-	logger.Trace3("logging message type: %s", "trace3")
+	logger.Trace("logging message type: %s", "trace")
 }
 
 func main() {
 	logger := logging.NewStdoutLogger("main")
 
-	fmt.Println("\n* logging level: TRACE2")
-	logger.Level = logging.TRACE2
+	fmt.Println("\n-- logging with default formatter --")
+
+	fmt.Println("\n* logging level: TRACE")
+	logger.Level = logging.TRACE
 	log_messages(logger)
 
-	fmt.Println("\n* logging level: DEBUG")
-	logger.Level = logging.DEBUG
+	fmt.Println("\n* logging level: INFO")
+	logger.Level = logging.INFO
 	log_messages(logger)
 
 	// adjust formatters
-	fmt.Println("\n-- logging without source formatter --")
-	logger.SetFormatter(logging.NewSimpleFormatter())
+	fmt.Println("\n-- logging with simple formatter --")
+	logger.SetFormatter(logging.BasicFormatter)
 
 	fmt.Println("\n* logging level: ERROR")
 	logger.Level = logging.ERROR
@@ -50,9 +50,11 @@ func main() {
 	log_messages(logger)
 
 	// adjust formatters
-	fmt.Println("\n-- logging json formatter --")
-	logger.SetFormatter(logging.NewJsonFormatter())
-	logger.Level = logging.TRACE3
+	fmt.Println("\n-- logging with json formatter --")
+	logger.SetFormatter(logging.JsonFormatter)
+
+	fmt.Println("\n* logging level: INFO")
+	logger.Level = logging.INFO
 	log_messages(logger)
 
 	fmt.Println()

@@ -6,6 +6,7 @@ package main
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/exonlabs/go-utils/pkg/logging"
 )
@@ -17,25 +18,22 @@ func log_messages(logger *logging.Logger) {
 	logger.Warn("logging message type: %s", "warn")
 	logger.Info("logging message type: %s", "info")
 	logger.Debug("logging message type: %s", "debug")
-	logger.Trace1("logging message type: %s", "trace1")
-	logger.Trace2("logging message type: %s", "trace2")
-	logger.Trace3("logging message type: %s", "trace3")
+	logger.Trace("logging message type: %s", "trace")
 }
 
-var formatter1 = &logging.Formatter{
-	RecordFormat: "{time} {level} -- {message}",
-	TimeFormat:   "2006/01/02 15:04:05",
+func formatter1(ts time.Time, lvl int, src, msg string) string {
+	return fmt.Sprintf("%s %-5s -- %s",
+		ts.Format("2006/01/02 15:04:05"), logging.LEVEL(lvl), msg)
 }
 
-var formatter2 = &logging.Formatter{
-	RecordFormat: "{time} -- [{level}] -- {message}",
-	TimeFormat:   "2006-01-02 15:04:05",
+func formatter2(ts time.Time, lvl int, src, msg string) string {
+	return fmt.Sprintf("%s -- [%-5s] -- %s",
+		ts.Format("2006-01-02 15:04:05"), logging.LEVEL(lvl), msg)
 }
 
-var formatter3 = &logging.Formatter{
-	RecordFormat: `{"time":"{time}", "level":"{level}", "message":"{message}"}`,
-	TimeFormat:   "2006-01-02 15:04:05",
-	EscapeMsg:    true,
+func formatter3(ts time.Time, lvl int, src, msg string) string {
+	return fmt.Sprintf(`{"time": "%s", "lvl": "%s", "msg": "%s"}`,
+		ts.Format("2006-01-02 15:04:05"), logging.LEVEL(lvl), msg)
 }
 
 func main() {

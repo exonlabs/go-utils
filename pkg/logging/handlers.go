@@ -6,51 +6,63 @@ package logging
 
 import (
 	"os"
+	"sync"
 )
 
-// Handler interface for processing log records.
+// Handler interface for processing log messages.
 type Handler interface {
-	HandleRecord(string) error
+	// HandleMessage process a log message.
+	HandleMessage(msg string) error
 }
 
 // StdoutHandler writes log messages to standard output.
-type StdoutHandler struct{}
+type StdoutHandler struct {
+	mu sync.Mutex
+}
 
 // NewStdoutHandler creates a new instance of StdoutHandler.
 func NewStdoutHandler() *StdoutHandler {
 	return &StdoutHandler{}
 }
 
-// HandleRecord writes the log record to standard output.
-func (h *StdoutHandler) HandleRecord(record string) error {
-	_, err := os.Stdout.Write([]byte(record + "\n"))
+// HandleMessage writes a log message to standard output.
+func (h *StdoutHandler) HandleMessage(msg string) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	_, err := os.Stdout.Write([]byte(msg + "\n"))
 	return err
 }
 
 // FileHandler writes log messages to a specified file.
 type FileHandler struct {
 	FilePath string // Path to the log file
+	mu       sync.Mutex
 }
 
-// NewFileHandler creates a new instance of FileHandler for the specified path.
+// NewFileHandler creates a new FileHandler for the specified path.
 func NewFileHandler(path string) *FileHandler {
 	return &FileHandler{
 		FilePath: path,
 	}
 }
 
-// HandleRecord writes the log record to the specified file.
-func (h *FileHandler) HandleRecord(record string) error {
-	f, err := os.OpenFile(h.FilePath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o664)
+// HandleMessage writes the log message to the specified file.
+func (h *FileHandler) HandleMessage(msg string) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	fh, err := os.OpenFile(
+		h.FilePath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o664)
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer fh.Close()
 
-	_, err = f.Write([]byte(record + "\n"))
+	_, err = fh.Write([]byte(msg + "\n"))
 	if err == nil {
 		// Ensure the output is flushed
-		err = f.Sync()
+		err = fh.Sync()
 	}
 	return err
 }

@@ -157,7 +157,7 @@ func (m *RoutineManager) AddRoutine(name string, rt Routine, enabled bool) error
 	if enabled {
 		rt.Enable()
 	}
-	m.Log.Trace1("added routine: %s", name)
+	m.Log.Trace("added routine: %s", name)
 
 	if m.IsInitialized() {
 		go rt.Start()
@@ -185,7 +185,7 @@ func (m *RoutineManager) DelRoutine(name string) error {
 		}
 	}
 
-	m.Log.Trace1("deleting routine: %s", name)
+	m.Log.Trace("deleting routine: %s", name)
 	delete(m.rtBuffer, name)
 	return nil
 }
@@ -201,10 +201,10 @@ func (m *RoutineManager) StartRoutine(name string) error {
 
 	m.rtBuffer[name].Enable()
 	if !m.rtBuffer[name].IsAlive() {
-		m.Log.Trace1("activating routine: %s", name)
+		m.Log.Trace("activating routine: %s", name)
 		go m.rtBuffer[name].Start()
 	} else {
-		m.Log.Trace1("already running routine: %s", name)
+		m.Log.Trace("already running routine: %s", name)
 	}
 	return nil
 }
@@ -218,7 +218,7 @@ func (m *RoutineManager) StopRoutine(name string) error {
 		return fmt.Errorf("invalid routine name")
 	}
 
-	m.Log.Trace1("deactivating routine: %s", name)
+	m.Log.Trace("deactivating routine: %s", name)
 	m.rtBuffer[name].Disable()
 	m.rtBuffer[name].Stop()
 	return nil
@@ -235,10 +235,10 @@ func (m *RoutineManager) RestartRoutine(name string) error {
 
 	m.rtBuffer[name].Enable()
 	if m.rtBuffer[name].IsAlive() {
-		m.Log.Trace1("restarting routine: %s", name)
+		m.Log.Trace("restarting routine: %s", name)
 		m.rtBuffer[name].Stop()
 	} else {
-		m.Log.Trace1("starting routine: %s", name)
+		m.Log.Trace("starting routine: %s", name)
 		go m.rtBuffer[name].Start()
 	}
 	return nil

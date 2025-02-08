@@ -139,6 +139,9 @@ func HandleCommand(cmd string) string {
 func main() {
 	log := logging.NewStdoutLogger("main")
 
+	commLog := logging.NewStdoutLogger("comm")
+	commLog.SetFormatter(logging.RawFormatter)
+
 	defer func() {
 		if wrkManager != nil {
 			wrkManager.Stop()
@@ -147,30 +150,23 @@ func main() {
 			stack := debug.Stack()
 			indx := bytes.Index(stack, []byte("panic({"))
 			log.Panic("%s", r)
-			log.Trace1("\n----------\n%s----------", stack[indx:])
+			log.Trace("\n----------\n%s----------", stack[indx:])
 			os.Exit(1)
-		} else {
-			log.Info("exit")
-			os.Exit(0)
 		}
 	}()
 
 	debug0 := flag.Bool("x", false, "\nenable debug logs")
-	debug1 := flag.Bool("xx", false, "enable debug and trace1 logs")
-	debug2 := flag.Bool("xxx", false, "enable debug and trace2 logs")
-	debug3 := flag.Bool("xxxx", false, "enable debug and trace3 logs")
+	debug1 := flag.Bool("xx", false, "enable debug and trace logs")
 	flag.Parse()
 
 	switch {
-	case *debug3:
-		log.Level = logging.TRACE3
-	case *debug2:
-		log.Level = logging.TRACE2
 	case *debug1:
-		log.Level = logging.TRACE1
+		log.Level = logging.TRACE
 	case *debug0:
 		log.Level = logging.DEBUG
+		commLog = nil
 	default:
+		commLog = nil
 	}
 
 	log.Info("**** starting ****")
@@ -179,7 +175,7 @@ func main() {
 	wrkIndx.Store(1)
 
 	commListener, err := commutils.NewListener(
-		fmt.Sprintf("sock@%s", cmdSock), nil, nil)
+		fmt.Sprintf("sock@%s", cmdSock), commLog, nil)
 	if err != nil {
 		log.Error(err.Error())
 		return
@@ -198,4 +194,6 @@ func main() {
 	}
 
 	wrkManager.Start()
+
+	log.Info("exit")
 }
