@@ -53,8 +53,10 @@ func (p *SampleProcess) Terminate() error {
 	// terminate activity after 3sec
 	exitSec := 3
 	p.Log.Info("exit after %d sec", exitSec)
-	for i := 0; i < exitSec && !p.KillEvent.IsSet(); i++ {
-		p.Sleep(1)
+	for i := 0; i < exitSec; i++ {
+		if !p.Sleep(1) {
+			break
+		}
 		p.Log.Info("term ... %d", (i + 1))
 	}
 

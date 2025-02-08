@@ -36,10 +36,10 @@ type TaskletHandler struct {
 	// flag to track current tasklet initialization state
 	isInitialized atomic.Bool
 
-	// TermEvent signals a termination operation.
-	TermEvent *events.Event
-	// KillEvent signals a forceful termination operation.
-	KillEvent *events.Event
+	// termEvent signals a termination operation.
+	termEvent *events.Event
+	// killEvent signals a forceful termination operation.
+	killEvent *events.Event
 }
 
 // NewTaskletHandler creates a new tasklet handler.
@@ -47,8 +47,8 @@ func NewTaskletHandler(log *logging.Logger, tsk Tasklet) *TaskletHandler {
 	return &TaskletHandler{
 		Log:       log,
 		tasklet:   tsk,
-		TermEvent: events.New(),
-		KillEvent: events.New(),
+		termEvent: events.New(),
+		killEvent: events.New(),
 	}
 }
 
@@ -95,15 +95,15 @@ func (h *TaskletHandler) Run() {
 			h.Log.Trace("\n----------\n%s----------", stack[indx:])
 		}
 		// Ensure termination execute if initialized and not killed.
-		if h.isInitialized.Load() && !h.KillEvent.IsSet() {
+		if h.isInitialized.Load() && !h.killEvent.IsSet() {
 			if err := h.tasklet.Terminate(); err != nil {
 				h.Log.Error("termination failed: %s", err.Error())
 			}
 		}
 	}()
 
-	h.TermEvent.Clear()
-	h.KillEvent.Clear()
+	h.termEvent.Clear()
+	h.killEvent.Clear()
 
 	// Attempt to initialize the tasklet.
 	if err := h.tasklet.Initialize(); err != nil {
@@ -113,7 +113,7 @@ func (h *TaskletHandler) Run() {
 	h.isInitialized.Store(true)
 
 	// Run tasklet execution loop until a termination event is set.
-	for !h.TermEvent.IsSet() {
+	for !h.termEvent.IsSet() {
 		if err := h.tasklet.Execute(); err != nil {
 			h.Log.Error("execution error: %s", err.Error())
 		}
@@ -134,27 +134,27 @@ func (h *TaskletHandler) Start() {
 // Stop gracefully stops the tasklet by setting the termination event.
 func (h *TaskletHandler) Stop() {
 	// If already stopping, forcefully kill.
-	if h.TermEvent.IsSet() {
-		h.KillEvent.Set()
+	if h.termEvent.IsSet() {
+		h.killEvent.Set()
 	} else {
-		h.TermEvent.Set()
+		h.termEvent.Set()
 	}
 }
 
 // Kill terminates the tasklet by setting both kill and termination events.
 func (h *TaskletHandler) Kill() {
-	h.KillEvent.Set()
-	h.TermEvent.Set()
+	h.killEvent.Set()
+	h.termEvent.Set()
 }
 
 // Sleep pauses execution for the given timeout duration (in seconds),
 // and waits for either a termination or kill event.
 func (h *TaskletHandler) Sleep(timeout float64) bool {
 	// Wait for kill event if termination is already set.
-	if h.TermEvent.IsSet() {
-		return h.KillEvent.Wait(timeout)
+	if h.termEvent.IsSet() {
+		return h.killEvent.Wait(timeout)
 	}
-	return h.TermEvent.Wait(timeout)
+	return h.termEvent.Wait(timeout)
 }
 
 // WaitStop waits for tasklet to stop for the given timeout duration (in seconds),

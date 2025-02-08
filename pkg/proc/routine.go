@@ -104,7 +104,7 @@ func (m *RoutineManager) Terminate() error {
 
 	// check and wait all routines exit
 	tPoll := float64(0.1)
-	for t := m.StoppingDelay; t > 0 && !m.KillEvent.IsSet(); t -= tPoll {
+	for t := m.StoppingDelay; t > 0 && !m.killEvent.IsSet(); t -= tPoll {
 		m.Sleep(tPoll)
 		chk := true
 		m.rtBuffLock.Lock()

@@ -11,11 +11,14 @@ import (
 	"os"
 	"path/filepath"
 	"runtime/debug"
-	"time"
 
-	"github.com/exonlabs/go-utils/pkg/comm/commutils"
+	"github.com/exonlabs/go-utils/pkg/comm/sockcomm"
 	"github.com/exonlabs/go-utils/pkg/logging"
 	"github.com/exonlabs/go-utils/pkg/proc"
+)
+
+var (
+	manage_sock = filepath.Join(os.TempDir(), "manage_sock")
 )
 
 type SampleProcess struct {
@@ -53,8 +56,9 @@ func (p *SampleProcess) HandleCommand(cmd string) string {
 
 	switch cmd {
 	case "exit":
+		p.Log.Info("stopping after 5 sec")
 		go func() {
-			time.Sleep(10 * time.Millisecond)
+			p.Sleep(5)
 			p.Stop()
 		}()
 	case "reset":
@@ -70,7 +74,6 @@ func (p *SampleProcess) HandleCommand(cmd string) string {
 func main() {
 	log := logging.NewStdoutLogger("main")
 
-	uri := fmt.Sprintf("sock@%s", filepath.Join(os.TempDir(), "process_sock"))
 	commLog := logging.NewStdoutLogger("comm")
 	commLog.SetFormatter(logging.RawFormatter)
 
@@ -100,7 +103,8 @@ func main() {
 
 	log.Info("**** starting ****")
 
-	commListener, err := commutils.NewListener(uri, commLog, nil)
+	commListener, err := sockcomm.NewListener(
+		fmt.Sprintf("sock@%s", manage_sock), commLog, nil)
 	if err != nil {
 		log.Error(err.Error())
 		return

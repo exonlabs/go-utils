@@ -62,8 +62,10 @@ func (rt *Routine1) Terminate() error {
 	// terminate activity after 3sec
 	exitSec := 3
 	rt.Log.Info("exit after %d sec", exitSec)
-	for i := 0; i < exitSec && !rt.KillEvent.IsSet(); i++ {
-		rt.Sleep(1)
+	for i := 0; i < exitSec; i++ {
+		if !rt.Sleep(1) {
+			break
+		}
 		rt.Log.Info("term ... %d", (i + 1))
 	}
 

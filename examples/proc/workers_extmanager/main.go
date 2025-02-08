@@ -14,16 +14,16 @@ import (
 	"sort"
 	"strings"
 	"sync/atomic"
-	"time"
 
-	"github.com/exonlabs/go-utils/pkg/comm/commutils"
+	"github.com/exonlabs/go-utils/pkg/comm/sockcomm"
 	"github.com/exonlabs/go-utils/pkg/logging"
 	"github.com/exonlabs/go-utils/pkg/proc"
 )
 
 var (
+	manage_sock = filepath.Join(os.TempDir(), "manage_sock")
+
 	wrkManager *proc.RoutineManager
-	cmdSock    = filepath.Join(os.TempDir(), "wrkmanager_sock")
 	workers    atomic.Int32
 	wrkIndx    atomic.Int32
 )
@@ -59,10 +59,7 @@ func HandleCommand(cmd string) string {
 
 	switch strings.TrimSpace(p[0]) {
 	case "exit":
-		go func() {
-			time.Sleep(3 * time.Second)
-			wrkManager.Stop()
-		}()
+		wrkManager.Stop()
 
 	case "list_workers":
 		workers := wrkManager.ListRoutines()
@@ -174,8 +171,8 @@ func main() {
 	workers.Store(3)
 	wrkIndx.Store(1)
 
-	commListener, err := commutils.NewListener(
-		fmt.Sprintf("sock@%s", cmdSock), commLog, nil)
+	commListener, err := sockcomm.NewListener(
+		fmt.Sprintf("sock@%s", manage_sock), commLog, nil)
 	if err != nil {
 		log.Error(err.Error())
 		return

@@ -96,15 +96,14 @@ func (h *Process) handleConnection(conn comm.Connection) {
 		}
 	}()
 
-	for !h.TermEvent.IsSet() && conn.IsOpened() {
-		b, addr, err := conn.RecvFrom(0)
+	for !h.termEvent.IsSet() && conn.IsOpened() {
+		b, addr, err := conn.RecvFrom(-1)
 		if err != nil {
-			if conn.IsOpened() && err != comm.ErrClosed {
-				h.Log.Error(err.Error())
-				continue
-			} else {
+			if err == comm.ErrClosed {
 				return
 			}
+			h.Log.Error(err.Error())
+			continue
 		}
 		cmd := strings.TrimSpace(string(b))
 		if cmd == "" {
@@ -112,7 +111,7 @@ func (h *Process) handleConnection(conn comm.Connection) {
 		}
 		reply := h.cmdHandler(cmd)
 		if reply != "" {
-			if err := conn.SendTo([]byte(reply+"\n"), addr, 0); err != nil {
+			if err := conn.SendTo([]byte(reply+"\n"), addr, -1); err != nil {
 				h.Log.Error(err.Error())
 			}
 		}
