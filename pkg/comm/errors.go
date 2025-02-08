@@ -25,10 +25,10 @@ var (
 	ErrBreak = fmt.Errorf("%woperation break", ErrError)
 	// ErrTimeout indicates that the operation timed out.
 	ErrTimeout = fmt.Errorf("%woperation timeout", ErrError)
-	// ErrRead indicates a read failure.
-	ErrRead = fmt.Errorf("%wread failed", ErrError)
-	// ErrWrite indicates a write failure.
-	ErrWrite = fmt.Errorf("%wwrite failed", ErrError)
+	// ErrSend indicates a send failure.
+	ErrSend = fmt.Errorf("%wsend failed", ErrError)
+	// ErrRecv indicates a recv failure.
+	ErrRecv = fmt.Errorf("%wrecv failed", ErrError)
 )
 
 // IsClosedError checks if the error is related to a closed connection.
@@ -43,6 +43,16 @@ func IsClosedError(err error) bool {
 		strings.Contains(err.Error(), "bad file descriptor"),
 		strings.Contains(err.Error(), "has been closed"),
 		strings.Contains(err.Error(), "input/output error"):
+		return true
+	default:
+		return false
+	}
+}
+
+// IsTLSError checks if the error is related to TLS error
+func IsTLSError(err error) bool {
+	switch {
+	case strings.Contains(err.Error(), "tls: "):
 		return true
 	default:
 		return false

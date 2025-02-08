@@ -5,8 +5,6 @@
 package comm
 
 import (
-	"strings"
-
 	"github.com/exonlabs/go-utils/pkg/abc/dictx"
 	"github.com/exonlabs/go-utils/pkg/logging"
 )
@@ -22,9 +20,6 @@ const (
 
 // Context represents the configuration and state for communication handling.
 type Context struct {
-	// uri specifies the resource identifier.
-	uri string
-
 	// CommLog is the logger instance for communication data logging.
 	CommLog *logging.Logger
 
@@ -46,9 +41,8 @@ type Context struct {
 //   - poll_chunksize: (int) the size of chunks to read during polling.
 //   - poll_maxsize: (int) the maximum size for read polling data.
 //     use 0 or negative value to disable max limit for read data polling.
-func NewContext(uri string, log *logging.Logger, opts dictx.Dict) *Context {
+func NewContext(log *logging.Logger, opts dictx.Dict) *Context {
 	ctx := &Context{
-		uri:           strings.TrimSpace(uri),
 		CommLog:       log,
 		Options:       opts,
 		PollTimeout:   POLL_TIMEOUT,
@@ -70,48 +64,4 @@ func NewContext(uri string, log *logging.Logger, opts dictx.Dict) *Context {
 	}
 
 	return ctx
-}
-
-// Uri returns the connection Uri.
-func (c *Context) Uri() string {
-	return c.uri
-}
-
-// Type returns the type of the connection as inferred from the Uri.
-// (ex.: tcp, tcp4, udp, sock, serial)
-func (c *Context) Type() string {
-	return strings.ToLower(strings.SplitN(c.uri, "@", 2)[0])
-}
-
-// LogMsg logs messages using the communication logger.
-func (c *Context) LogMsg(msg string, args ...any) {
-	if c.CommLog != nil && msg != "" {
-		c.CommLog.Info(msg, args...)
-	}
-}
-
-// LogTx logs transmitted data in a formatted hexadecimal string.
-//
-//	2006-01-02 15:04:05.000000 TX >> 0102030405060708090A0B0C0D0E0F
-func (c *Context) LogTx(data []byte, addr any) {
-	if c.CommLog != nil && len(data) > 0 {
-		if addr != nil {
-			c.CommLog.Info("(%s) TX >> %X", addr, data)
-		} else {
-			c.CommLog.Info("TX >> %X", data)
-		}
-	}
-}
-
-// LogRx logs received data in a formatted hexadecimal string.
-//
-//	2006-01-02 15:04:05.000000 RX << 0102030405060708090A0B0C0D0E0F
-func (c *Context) LogRx(data []byte, addr any) {
-	if c.CommLog != nil && len(data) > 0 {
-		if addr != nil {
-			c.CommLog.Info("(%s) RX << %X", addr, data)
-		} else {
-			c.CommLog.Info("RX << %X", data)
-		}
-	}
 }

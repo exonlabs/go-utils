@@ -23,14 +23,11 @@ import (
 	"github.com/exonlabs/go-utils/pkg/logging"
 )
 
-// ParseUri parses a net socket URI into params.
+// ParseUri parses a network socket URI.
 //
 //	The expected URI format is `sock@<path>`
 //
 //	example:
-//	server
-//	   - sock@/path/to/sock/file
-//	client
 //	   - sock@/path/to/sock/file
 //
 // Returns the sock params and any error encountered.
@@ -55,9 +52,10 @@ type Connection struct {
 	// Context containing common attributes and functions.
 	*comm.Context
 
+	// uri specifies the resource identifier.
+	uri string
 	// The file system path for net socket.
 	path string
-
 	// The underlying network connection.
 	netConn net.Conn
 
@@ -66,38 +64,51 @@ type Connection struct {
 
 	// isOpened represents the connecton status, opened or closed.
 	isOpened atomic.Bool
-	// closeEvent signals a close operation.
+	// closeEvent signals a closing operation.
 	closeEvent atomic.Bool
-	// breakReadEvent signals a read interrupt operation.
-	breakReadEvent atomic.Bool
+	// breakRecvEvent signals a receive break interrupt operation.
+	breakRecvEvent atomic.Bool
 
-	// sMutex defines mutex for state change operations (open/close).
-	sMutex sync.Mutex
-	// rMutex defines mutex for read operations.
-	rMutex sync.Mutex
-	// wMutex defines mutex for write operations.
-	wMutex sync.Mutex
-	// rwWaitGrp defines wait group for read/write operations.
-	rwWaitGrp sync.WaitGroup
+	// muState defines mutex for state change operations (open/close).
+	muState sync.Mutex
+	// muSend defines mutex for write operations.
+	muSend sync.Mutex
+	// muRecv defines mutex for read operations.
+	muRecv sync.Mutex
+	// wgClose defines wait group for close operations.
+	wgClose sync.WaitGroup
 }
 
 // NewConnection creates and initializes a new Connection for the given URI.
-// The URI specifies the sock path.
-func NewConnection(uri string, log *logging.Logger, opts dictx.Dict) (*Connection, error) {
+func NewConnection(uri string, commlog *logging.Logger, opts dictx.Dict) (*Connection, error) {
+	uri = strings.TrimSpace(uri)
 	path, err := ParseUri(uri)
 	if err != nil {
 		return nil, err
 	}
 
-	return &Connection{
-		Context: comm.NewContext(uri, log, opts),
+	c := &Connection{
+		Context: comm.NewContext(commlog, opts),
+		uri:     uri,
 		path:    path,
-	}, nil
+	}
+
+	return c, nil
 }
 
 // String returns a string representation of the Connection.
 func (c *Connection) String() string {
-	return fmt.Sprintf("<SockConnection: %s>", c.Uri())
+	return fmt.Sprintf("<SockConnection: %s>", c.uri)
+}
+
+// Uri returns the URI of the connection
+func (c *Connection) Uri() string {
+	return c.uri
+}
+
+// Type returns the type of the connection as inferred from the Uri.
+func (c *Connection) Type() string {
+	return "sock"
 }
 
 // NetConn returns the net connection instance.
@@ -105,7 +116,7 @@ func (c *Connection) NetConn() net.Conn {
 	return c.netConn
 }
 
-// Parent retrieves the parent Listener, if any, associated with the Connection.
+// Parent returns the parent Listener if any is associated with the Connection.
 func (c *Connection) Parent() comm.Listener {
 	return c.parent
 }
@@ -122,8 +133,8 @@ func (c *Connection) Open(timeout float64) error {
 		return nil
 	}
 
-	c.sMutex.Lock()
-	defer c.sMutex.Unlock()
+	c.muState.Lock()
+	defer c.muState.Unlock()
 
 	// do nothing if already opened
 	if c.isOpened.Load() {
@@ -139,10 +150,10 @@ func (c *Connection) Open(timeout float64) error {
 
 	conn, err := dialer.Dial("unix", c.path)
 	if err != nil {
-		c.LogMsg("CONNECT_FAIL -- %v", err)
+		comm.LogMsg(c.CommLog, "CONNECT_FAIL -- %v", err)
 		return fmt.Errorf("%w, %v", comm.ErrConnection, err)
 	}
-	c.LogMsg("CONNECTED -- %s", c.Uri())
+	comm.LogMsg(c.CommLog, "CONNECTED -- %s", c.uri)
 	c.netConn = conn
 
 	c.closeEvent.Store(false)
@@ -159,8 +170,8 @@ func (c *Connection) Close() {
 
 	c.closeEvent.Store(true)
 
-	c.sMutex.Lock()
-	defer c.sMutex.Unlock()
+	c.muState.Lock()
+	defer c.muState.Unlock()
 
 	// do nothing if already closed
 	if !c.isOpened.Load() {
@@ -170,24 +181,25 @@ func (c *Connection) Close() {
 	// close connection
 	c.netConn.Close()
 
-	c.rwWaitGrp.Wait()
-	c.LogMsg("DISCONNECTED -- %s", c.Uri())
+	c.wgClose.Wait()
+	comm.LogMsg(c.CommLog, "DISCONNECTED -- %s", c.uri)
 	c.isOpened.Store(false)
 }
 
 // Cancel cancels any ongoing operations on the connection.
 func (c *Connection) Cancel() {
-	c.breakReadEvent.Store(true)
+	c.CancelSend()
+	c.CancelRecv()
 }
 
 // Cancel interrupts the ongoing sending operation for this Connection.
 func (c *Connection) CancelSend() {
-	// do nothing, not available for serial port
+	// do nothing
 }
 
 // Cancel interrupts the ongoing receiving operation for this Connection.
 func (c *Connection) CancelRecv() {
-	c.breakReadEvent.Store(true)
+	c.breakRecvEvent.Store(true)
 }
 
 // Send transmits data over the connection, with a specified timeout.
@@ -196,24 +208,26 @@ func (c *Connection) Send(data []byte, timeout float64) error {
 }
 
 // SendTo transmits data to addr over the connection, with a specified timeout.
+//
+// Setting timeout 0 or negative value will wait indefinitely.
 func (c *Connection) SendTo(data []byte, addr any, timeout float64) error {
 	if len(data) == 0 {
 		return errors.New("empty data")
 	}
 
-	// Acquire write lock
-	c.wMutex.Lock()
-	defer c.wMutex.Unlock()
+	// Acquire send lock
+	c.muSend.Lock()
+	defer c.muSend.Unlock()
 
 	// Check connection state after acquiring the lock
-	if c.closeEvent.Load() || !c.isOpened.Load() {
+	if !c.isOpened.Load() || c.closeEvent.Load() {
 		return comm.ErrClosed
 	}
 
-	c.rwWaitGrp.Add(1)
-	defer c.rwWaitGrp.Done()
+	c.wgClose.Add(1)
+	defer c.wgClose.Done()
 
-	c.LogTx(data, nil)
+	comm.LogTx(c.CommLog, data, nil)
 	if timeout > 0 {
 		c.netConn.SetWriteDeadline(time.Now().Add(
 			time.Duration(timeout * float64(time.Second))))
@@ -226,12 +240,12 @@ func (c *Connection) SendTo(data []byte, addr any, timeout float64) error {
 	if err != nil {
 		if comm.IsClosedError(err) {
 			c.closeEvent.Store(true)
-			c.LogMsg("CONN_CLOSED -- %v", err)
+			comm.LogMsg(c.CommLog, "CONN_CLOSED -- %v", err)
 			go c.Close()
 			return comm.ErrClosed
 		}
-		c.LogMsg("SEND_ERROR -- %v", err)
-		return fmt.Errorf("%w, %v", comm.ErrWrite, err)
+		comm.LogMsg(c.CommLog, "SEND_ERROR -- %v", err)
+		return fmt.Errorf("%w, %v", comm.ErrSend, err)
 	}
 
 	return nil
@@ -244,22 +258,24 @@ func (c *Connection) Recv(timeout float64) ([]byte, error) {
 	return b, err
 }
 
-// Recv waits for incoming data from addr over the connection until a timeout
-// or interrupt event occurs. Setting timeout=0 will wait indefinitely.
+// RecvFrom waits for incoming data from addr over the connection until a timeout
+// or interrupt event occurs.
+//
+// Setting timeout 0 or negative value will wait indefinitely.
 func (c *Connection) RecvFrom(timeout float64) ([]byte, any, error) {
 	// Acquire read lock
-	c.rMutex.Lock()
-	defer c.rMutex.Unlock()
+	c.muRecv.Lock()
+	defer c.muRecv.Unlock()
 
 	// Check connection state after acquiring the lock
-	if c.closeEvent.Load() || !c.isOpened.Load() {
+	if !c.isOpened.Load() || c.closeEvent.Load() {
 		return nil, nil, comm.ErrClosed
 	}
 
-	c.rwWaitGrp.Add(1)
-	defer c.rwWaitGrp.Done()
+	c.wgClose.Add(1)
+	defer c.wgClose.Done()
 
-	c.breakReadEvent.Store(false)
+	c.breakRecvEvent.Store(false)
 
 	// determine read buffer size and polling timeout
 	nRead := c.PollChunkSize
@@ -267,14 +283,16 @@ func (c *Connection) RecvFrom(timeout float64) ([]byte, any, error) {
 		nRead = c.PollMaxSize
 	}
 
-	tPoll := time.Duration(c.PollTimeout * float64(time.Second))
-	if tPoll <= 0 {
-		tPoll = time.Duration(comm.POLL_TIMEOUT * float64(time.Second))
-	}
+	// set read polling duration and deadline
+	var tPolling time.Duration
+	var tDeadline time.Time
 
-	var tBreak time.Time
+	tPolling = time.Duration(c.PollTimeout * float64(time.Second))
+	if tPolling <= 0 {
+		tPolling = time.Duration(comm.POLL_TIMEOUT * float64(time.Second))
+	}
 	if timeout > 0 {
-		tBreak = time.Now().Add(
+		tDeadline = time.Now().Add(
 			time.Duration(timeout * float64(time.Second)))
 	}
 
@@ -282,18 +300,18 @@ func (c *Connection) RecvFrom(timeout float64) ([]byte, any, error) {
 
 	b := make([]byte, nRead)
 	for {
-		c.netConn.SetReadDeadline(time.Now().Add(tPoll))
+		c.netConn.SetReadDeadline(time.Now().Add(tPolling))
 		n, err := c.netConn.Read(b)
 		if err != nil {
 			if comm.IsClosedError(err) {
 				c.closeEvent.Store(true)
-				c.LogMsg("CONN_CLOSED -- %v", err)
+				comm.LogMsg(c.CommLog, "CONN_CLOSED -- %v", err)
 				go c.Close()
 				return nil, nil, comm.ErrClosed
 			}
 			if _, ok := err.(net.Error); !ok || !err.(net.Error).Timeout() {
-				c.LogMsg("RECV_ERROR -- %v", err)
-				return nil, nil, fmt.Errorf("%w, %v", comm.ErrRead, err)
+				comm.LogMsg(c.CommLog, "RECV_ERROR -- %v", err)
+				return nil, nil, fmt.Errorf("%w, %v", comm.ErrRecv, err)
 			}
 		}
 
@@ -314,15 +332,15 @@ func (c *Connection) RecvFrom(timeout float64) ([]byte, any, error) {
 		if c.parent != nil && c.parent.stopEvent.Load() {
 			return nil, nil, comm.ErrClosed
 		}
-		if c.breakReadEvent.Load() {
+		if c.breakRecvEvent.Load() {
 			return nil, nil, comm.ErrBreak
 		}
-		if timeout > 0 && time.Now().After(tBreak) {
+		if timeout > 0 && time.Now().After(tDeadline) {
 			return nil, nil, comm.ErrTimeout
 		}
 	}
 
-	c.LogRx(data, nil)
+	comm.LogRx(c.CommLog, data, nil)
 	return data, nil, nil
 }
 
@@ -334,43 +352,55 @@ type Listener struct {
 	// Context containing common attributes such as logging and events.
 	*comm.Context
 
+	// uri specifies the resource identifier.
+	uri string
 	// The file system path of net socket to listen on.
 	path string
-
 	// The underlying net listener.
 	netListener net.Listener
 
-	// The handler function to be called when a new connection is accepted.
-	connectionHandler func(comm.Connection)
+	// ConnectionHandler defines the function to handle incoming connections.
+	ConnectionHandler func(comm.Connection)
 
 	// isActive represents the listener status, started or stopped.
 	isActive atomic.Bool
 	// stopEvent signals a stop operation.
 	stopEvent atomic.Bool
 
-	// sMutex defines mutex for state change operations (start/stop).
-	sMutex sync.Mutex
+	// muState defines mutex for state change operations (start/stop).
+	muState sync.Mutex
 }
 
-// NewListener creates a new net socket Listener.
-// The parsed options are:
-//   - connections_limit: (int) the limit on number of concurrent connections.
-//     use 0 to disable connections limit.
-func NewListener(uri string, log *logging.Logger, opts dictx.Dict) (*Listener, error) {
+// NewListener creates a new Listener.
+func NewListener(uri string, commlog *logging.Logger, opts dictx.Dict) (*Listener, error) {
+	uri = strings.TrimSpace(uri)
 	path, err := ParseUri(uri)
 	if err != nil {
 		return nil, err
 	}
 
-	return &Listener{
-		Context: comm.NewContext(uri, log, opts),
+	l := &Listener{
+		Context: comm.NewContext(commlog, opts),
+		uri:     uri,
 		path:    path,
-	}, nil
+	}
+
+	return l, nil
 }
 
-// String returns a string representation of the net socket Listener.
+// String returns a string representation of the Listener.
 func (l *Listener) String() string {
-	return fmt.Sprintf("<SockListener: %s>", l.Uri())
+	return fmt.Sprintf("<SockListener: %s>", l.uri)
+}
+
+// Uri returns the URI of the listener
+func (l *Listener) Uri() string {
+	return l.uri
+}
+
+// Type returns the type of the listener as inferred from the Uri.
+func (l *Listener) Type() string {
+	return "sock"
 }
 
 // NetListener returns the net listener instance.
@@ -379,36 +409,37 @@ func (l *Listener) NetListener() net.Listener {
 }
 
 // SetConnHandler sets a callback function to handle connections.
-func (l *Listener) SetConnHandler(h func(comm.Connection)) {
-	l.connectionHandler = h
+func (l *Listener) SetConnHandler(handler func(comm.Connection)) {
+	l.ConnectionHandler = handler
 }
 
-// IsActive checks if the net socket listener is currently active.
+// IsActive checks if the listener is currently active.
 func (l *Listener) IsActive() bool {
 	return l.isActive.Load() && !l.stopEvent.Load()
 }
 
 func (l *Listener) startListener() error {
-	cfg := net.ListenConfig{
+	lConfig := net.ListenConfig{
 		KeepAlive: -1, // disabled
 	}
 	if v := dictx.GetFloat(l.Options, "keepalive_interval", -1); v >= 0 {
-		cfg.KeepAlive = time.Duration(v * float64(time.Second))
+		lConfig.KeepAlive = time.Duration(v * float64(time.Second))
 	}
 
-	// listener instance
-	netListener, err := cfg.Listen(context.Background(), "unix", l.path)
+	// net listener
+	netListener, err := lConfig.Listen(
+		context.Background(), "unix", l.path)
 	if err != nil {
 		return err
 	}
-	// set connection limit (if configured)
+	// set connection limit
 	if v := dictx.GetInt(l.Options, "connections_limit", 0); v > 0 {
 		netListener = netutil.LimitListener(netListener, v)
 	}
-	l.LogMsg("LISTENING -- %s", l.Uri())
+	comm.LogMsg(l.CommLog, "LISTENING -- %s", l.uri)
 	l.netListener = netListener
 
-	var waitGrp sync.WaitGroup
+	var wg sync.WaitGroup
 
 	l.stopEvent.Store(false)
 	l.isActive.Store(true)
@@ -416,47 +447,47 @@ func (l *Listener) startListener() error {
 		l.stopEvent.Store(true)
 		netListener.Close()
 		// wait all connections handlers termination
-		waitGrp.Wait()
+		wg.Wait()
 		os.Remove(l.path)
-		l.LogMsg("CLOSED -- %s", l.Uri())
+		comm.LogMsg(l.CommLog, "CLOSED -- %s", l.uri)
 		l.isActive.Store(false)
 	}()
 
 	for !l.stopEvent.Load() {
 		// wait for new connection
-		c, err := netListener.Accept()
+		new_conn, err := netListener.Accept()
 		if err != nil {
 			if comm.IsClosedError(err) {
 				break
 			} else {
-				l.LogMsg("CONN_ERROR -- %v", err)
+				comm.LogMsg(l.CommLog, "CONN_ERROR -- %v", err)
 				continue
 			}
 		}
 
 		// handle new connection
-		waitGrp.Add(1)
-		go func(netConn net.Conn) {
-			uri := fmt.Sprintf("%s@%s", l.Type(), netConn.RemoteAddr())
-			nc, err := NewConnection(uri, l.CommLog, l.Options)
+		wg.Add(1)
+		go func(conn net.Conn) {
+			uri := fmt.Sprintf("%s@%s", l.Type(), conn.RemoteAddr())
+			c, err := NewConnection(uri, l.CommLog, l.Options)
 			if err != nil {
-				l.LogMsg("CONN_ERROR -- %v", err)
-				netConn.Close()
+				comm.LogMsg(l.CommLog, "CONN_ERROR -- %v", err)
+				conn.Close()
 				return
 			}
-			nc.netConn = netConn
-			nc.parent = l
-			nc.isOpened.Store(true)
-			nc.LogMsg("CONNECTED")
+			c.netConn = conn
+			c.parent = l
+			c.isOpened.Store(true)
+			comm.LogMsg(c.CommLog, "CONNECTED")
 
 			defer func() {
-				netConn.Close()
-				nc.LogMsg("DISCONNECTED")
-				waitGrp.Done()
+				conn.Close()
+				comm.LogMsg(c.CommLog, "DISCONNECTED")
+				wg.Done()
 			}()
 
-			l.connectionHandler(nc)
-		}(c)
+			l.ConnectionHandler(c)
+		}(new_conn)
 	}
 
 	return nil
@@ -465,15 +496,15 @@ func (l *Listener) startListener() error {
 // Start begins listening for connections, calling the connectionHandler
 // for each established connection.
 func (l *Listener) Start() error {
-	if l.connectionHandler == nil {
+	if l.ConnectionHandler == nil {
 		return errors.New("empty connection handler")
 	}
 
 	// error if already started
-	if !l.sMutex.TryLock() {
+	if !l.muState.TryLock() {
 		return errors.New("Listener already started")
 	}
-	defer l.sMutex.Unlock()
+	defer l.muState.Unlock()
 
 	return l.startListener()
 }
