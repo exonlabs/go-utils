@@ -12,11 +12,15 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"syscall"
+	"time"
 
 	"github.com/exonlabs/go-utils/pkg/abc/dictx"
 	"github.com/exonlabs/go-utils/pkg/comm"
-	"github.com/exonlabs/go-utils/pkg/comm/commutils"
+	"github.com/exonlabs/go-utils/pkg/comm/netcomm"
+	"github.com/exonlabs/go-utils/pkg/comm/serialcomm"
+	"github.com/exonlabs/go-utils/pkg/comm/sockcomm"
 	"github.com/exonlabs/go-utils/pkg/logging"
 )
 
@@ -57,7 +61,7 @@ AwEHoUQDQgAEmVBl+UYnjOtqoTOVysKPbiAqF/5Mb4WJoVeI2KH+jipmkiLsO6/0
 )
 
 func run(cli comm.Connection) {
-	if err := cli.Open(0); err != nil {
+	if err := cli.Open(-1); err != nil {
 		if errors.Is(err, comm.ErrClosed) || errors.Is(err, comm.ErrBreak) {
 			return
 		}
@@ -65,7 +69,7 @@ func run(cli comm.Connection) {
 	}
 	defer cli.Close()
 
-	// // recv hello msg at start of connection
+	// // Test receving hello msg at start of connection
 	// if data, err := cli.Recv(3); err == nil {
 	// 	fmt.Printf("received: %d bytes  %s", len(data), string(data))
 	// 	fmt.Println("--------------------------------")
@@ -76,7 +80,7 @@ func run(cli comm.Connection) {
 	for i := 1; i <= num_of_msgs; i++ {
 		msg := []byte(fmt.Sprintf("msg: %d\n", i))
 		fmt.Printf("sending: %d bytes  %s", len(msg), string(msg))
-		err := cli.Send(msg, 0)
+		err := cli.Send(msg, -1)
 		if err == nil {
 			data, err := cli.Recv(3)
 			if err == nil {
@@ -93,10 +97,10 @@ func run(cli comm.Connection) {
 			}
 		}
 
-		// // add delay between messages
-		// if i < num_of_msgs {
-		// 	time.Sleep(500 * time.Millisecond)
-		// }
+		// add delay between messages
+		if i < num_of_msgs {
+			time.Sleep(500 * time.Millisecond)
+		}
 	}
 
 	fmt.Println("end connection")
@@ -150,9 +154,24 @@ func main() {
 		})
 	}
 
-	cli, err := commutils.NewConnection(*uri, commLog, opts)
+	var cli comm.Connection
+	var err error
+
+	// Determine the connection type from the URI prefix
+	switch strings.ToLower(strings.SplitN(*uri, "@", 2)[0]) {
+	case "tcp", "tcp4", "tcp6", "udp", "udp4", "udp6":
+		cli, err = netcomm.NewConnection(*uri, commLog, opts)
+	case "sock":
+		cli, err = sockcomm.NewConnection(*uri, commLog, opts)
+	case "serial":
+		cli, err = serialcomm.NewConnection(*uri, commLog, opts)
+	default:
+		fmt.Printf("\nError: invalid uri type\n\n")
+		return
+	}
 	if err != nil {
-		panic(err)
+		fmt.Printf("\nError: %s\n\n", err.Error())
+		return
 	}
 
 	// register callback for close signals

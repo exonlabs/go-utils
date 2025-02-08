@@ -16,7 +16,9 @@ import (
 
 	"github.com/exonlabs/go-utils/pkg/abc/dictx"
 	"github.com/exonlabs/go-utils/pkg/comm"
-	"github.com/exonlabs/go-utils/pkg/comm/commutils"
+	"github.com/exonlabs/go-utils/pkg/comm/netcomm"
+	"github.com/exonlabs/go-utils/pkg/comm/serialcomm"
+	"github.com/exonlabs/go-utils/pkg/comm/sockcomm"
 	"github.com/exonlabs/go-utils/pkg/logging"
 )
 
@@ -57,20 +59,17 @@ iQX5QXHaom1QTFrS3nSw93ShsF0rQa5rQA==
 )
 
 func HandleConnection(conn comm.Connection) {
-	switch conn.Type() {
-	case "tcp", "tcp4", "tcp6":
-		defer fmt.Println("End peer connection", conn)
-		fmt.Println("New peer connection", conn)
-
-		// // send hello msg at start of connection
-		// if err := conn.Send([]byte("HELLO\n"), 0); err != nil {
-		// 	fmt.Println(err.Error())
-		// 	return
-		// }
-	}
+	// // Test sending hello msg at start of connection
+	// switch conn.Type() {
+	// case "tcp", "tcp4", "tcp6", "sock":
+	// 	if err := conn.Send([]byte("HELLO\n"), 0); err != nil {
+	// 		fmt.Println(err.Error())
+	// 		return
+	// 	}
+	// }
 
 	for conn.IsOpened() {
-		data, addr, err := conn.RecvFrom(0)
+		data, addr, err := conn.RecvFrom(-1)
 		if err != nil {
 			if conn.IsOpened() && err != comm.ErrClosed {
 				fmt.Println("error receiving:", err)
@@ -89,15 +88,15 @@ func HandleConnection(conn comm.Connection) {
 
 		switch msg {
 		case "STOP_PEER":
-			conn.SendTo([]byte("peer stopped by server"), addr, 0)
+			conn.SendTo([]byte("peer stopped by server"), addr, -1)
 			conn.Close()
 			return
 		case "STOP_SERVER":
-			conn.SendTo([]byte("server stopped"), addr, 0)
+			conn.SendTo([]byte("server stopped"), addr, -1)
 			conn.Parent().Stop()
 			return
 		default:
-			err := conn.SendTo([]byte("echo: "+msg+"\n"), addr, 0)
+			err := conn.SendTo([]byte("echo: "+msg+"\n"), addr, -1)
 			if err != nil {
 				fmt.Println("error:", err)
 			}
@@ -132,13 +131,14 @@ func main() {
 
 	// optional args
 	opts := dictx.Dict{
-		"poll_timeout":      0.01,
-		"poll_chunksize":    4096,
-		"poll_maxsize":      1048576,
-		"connections_limit": 1,
+		"poll_timeout":   0.01,
+		"poll_chunksize": 4096,
+		"poll_maxsize":   1048576,
 	}
 	if *multi {
 		dictx.Set(opts, "connections_limit", 5)
+	} else {
+		dictx.Set(opts, "connections_limit", 1)
 	}
 
 	// TLS config
@@ -166,9 +166,24 @@ func main() {
 		dictx.Set(opts, "tls_mutual_auth", true)
 	}
 
-	srv, err := commutils.NewListener(*uri, commLog, opts)
+	var srv comm.Listener
+	var err error
+
+	// Determine the connection type from the URI prefix
+	switch strings.ToLower(strings.SplitN(*uri, "@", 2)[0]) {
+	case "tcp", "tcp4", "tcp6", "udp", "udp4", "udp6":
+		srv, err = netcomm.NewListener(*uri, commLog, opts)
+	case "sock":
+		srv, err = sockcomm.NewListener(*uri, commLog, opts)
+	case "serial":
+		srv, err = serialcomm.NewListener(*uri, commLog, opts)
+	default:
+		fmt.Printf("\nError: invalid uri type\n\n")
+		return
+	}
 	if err != nil {
-		panic(err)
+		fmt.Printf("\nError: %s\n\n", err.Error())
+		return
 	}
 	srv.ConnectionHandler(HandleConnection)
 
