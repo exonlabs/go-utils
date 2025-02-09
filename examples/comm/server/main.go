@@ -136,9 +136,9 @@ func main() {
 		"poll_maxsize":   1048576,
 	}
 	if *multi {
-		dictx.Set(opts, "connections_limit", 5)
+		dictx.Set(opts, "simultaneous_connections", 5)
 	} else {
-		dictx.Set(opts, "connections_limit", 1)
+		dictx.Set(opts, "simultaneous_connections", 1)
 	}
 
 	// TLS config

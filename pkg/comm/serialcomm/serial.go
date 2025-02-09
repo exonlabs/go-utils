@@ -90,9 +90,6 @@ func ParseUri(uri string) (string, *serial.Mode, error) {
 
 // Connection represents a serial connection with event support and logging.
 type Connection struct {
-	// Context containing common attributes and functions.
-	*comm.Context
-
 	// uri specifies the resource identifier.
 	uri string
 	// The serial port identifier (e.g., COM1, /dev/ttyS0).
@@ -120,9 +117,18 @@ type Connection struct {
 	muRecv sync.Mutex
 	// wgClose defines wait group for close operations.
 	wgClose sync.WaitGroup
+
+	// CommLog is the logger instance for communication data logging.
+	CommLog *logging.Logger
+
+	// PollConfig defines the read polling.
+	PollConfig *comm.PollingConfig
 }
 
 // NewConnection creates and initializes a new Connection for the given URI.
+//
+// The parsed options are:
+//   - Polling Options: detailed in [comm.ParsePollingConfig]
 func NewConnection(uri string, commlog *logging.Logger, opts dictx.Dict) (*Connection, error) {
 	uri = strings.TrimSpace(uri)
 	port, mode, err := ParseUri(uri)
@@ -131,16 +137,22 @@ func NewConnection(uri string, commlog *logging.Logger, opts dictx.Dict) (*Conne
 	}
 
 	c := &Connection{
-		Context: comm.NewContext(commlog, opts),
 		uri:     uri,
 		port:    port,
 		mode:    mode,
+		CommLog: commlog,
+	}
+
+	// set polling options
+	c.PollConfig, err = comm.ParsePollingConfig(opts)
+	if err != nil {
+		return nil, err
 	}
 
 	// set dynamic polling relative to baudrate. actual 1 byte = 10 bits
 	// set to max of "user defined", "0.02 mSec" or "20 bytes duration".
-	c.PollTimeout = gx.Max(
-		c.PollTimeout, 0.02, 20.0/float64(mode.BaudRate))
+	c.PollConfig.Timeout = gx.Max(
+		c.PollConfig.Timeout, 0.02, 20.0/float64(mode.BaudRate))
 
 	return c, nil
 }
@@ -250,7 +262,7 @@ func (c *Connection) SetMode(mode string) error {
 
 	// set dynamic polling relative to baudrate. actual 1 byte = 10 bits
 	// set to max of "user defined", "0.02 mSec" or "20 bytes duration".
-	c.PollTimeout = gx.Max(0.02, 20.0/float64(newMode.BaudRate))
+	c.PollConfig.Timeout = gx.Max(0.02, 20.0/float64(newMode.BaudRate))
 
 	// apply new mode if port is already opened
 	if c.isOpened.Load() {
@@ -358,21 +370,20 @@ func (c *Connection) RecvFrom(timeout float64) ([]byte, any, error) {
 	c.breakRecvEvent.Store(false)
 
 	// determine read buffer size and polling timeout
-	nRead := c.PollChunkSize
-	if c.PollMaxSize > 0 {
-		nRead = c.PollMaxSize
+	nRead := c.PollConfig.ChunkSize
+	if c.PollConfig.MaxSize > 0 {
+		nRead = c.PollConfig.MaxSize
 	}
 
 	// set read polling duration and deadline
 	var tPolling time.Duration
 	var tDeadline time.Time
 
-	tPolling = time.Duration(c.PollTimeout * float64(time.Second))
-	if tPolling <= 0 {
-		tPolling = time.Duration(comm.POLL_TIMEOUT * float64(time.Second))
-	}
+	tPolling = time.Duration(
+		c.PollConfig.Timeout * float64(time.Second))
 	if timeout > 0 {
-		tDeadline = time.Now().Add(time.Duration(timeout * float64(time.Second)))
+		tDeadline = time.Now().Add(
+			time.Duration(timeout * float64(time.Second)))
 	}
 
 	c.serialPort.SetReadTimeout(tPolling)
@@ -395,7 +406,7 @@ func (c *Connection) RecvFrom(timeout float64) ([]byte, any, error) {
 
 		if n > 0 {
 			data = append(data, b[:n]...)
-			if c.PollMaxSize > 0 {
+			if c.PollConfig.MaxSize > 0 {
 				nRead -= n
 				if nRead <= 0 {
 					break
@@ -423,9 +434,6 @@ func (c *Connection) RecvFrom(timeout float64) ([]byte, any, error) {
 
 // Listener represents a serial listener that handles incoming connections
 type Listener struct {
-	// Context containing common attributes such as logging and events.
-	*comm.Context
-
 	// serial port connection.
 	serialConn *Connection
 
@@ -437,9 +445,18 @@ type Listener struct {
 
 	// muState defines mutex for state change operations (start/stop).
 	muState sync.Mutex
+
+	// CommLog is the logger instance for communication data logging.
+	CommLog *logging.Logger
+
+	// PollConfig defines the read polling.
+	PollConfig *comm.PollingConfig
 }
 
 // NewListener creates a new Listener.
+//
+// The parsed options are:
+//   - Polling Options: detailed in [comm.ParsePollingConfig]
 func NewListener(uri string, commlog *logging.Logger, opts dictx.Dict) (*Listener, error) {
 	conn, err := NewConnection(uri, commlog, opts)
 	if err != nil {
@@ -447,8 +464,9 @@ func NewListener(uri string, commlog *logging.Logger, opts dictx.Dict) (*Listene
 	}
 
 	return &Listener{
-		Context:    comm.NewContext(commlog, opts),
 		serialConn: conn,
+		CommLog:    commlog,
+		PollConfig: conn.PollConfig,
 	}, nil
 }
 

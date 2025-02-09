@@ -7,11 +7,9 @@ package netcomm
 import (
 	"context"
 	"crypto/tls"
-	"crypto/x509"
 	"errors"
 	"fmt"
 	"net"
-	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -77,132 +75,10 @@ func GetAddr(network, address string) (net.Addr, error) {
 	return nil, errors.New("invalid network type")
 }
 
-// GetTlsConfig returns tls configuration from parsed options.
-// The parsed options are:
-//   - tls_enable: (bool) enable/disable TLS, default disabled.
-//   - tls_mutual_auth: (bool) enable/disable mutual TLS auth, default disabled.
-//   - tls_server_name: (string) server name to use by client TLS session.
-//   - tls_min_version: (float64) min TLS version to use. default TLS v1.2
-//   - tls_max_version: (float64) max TLS version to use. default TLS v1.3
-//   - tls_ca_certs: (string) comma separated list of CA certs to use.
-//     cert values could be file paths to load or cert content in PEM format.
-//   - tls_local_cert: (string) cert to use for TLS session.
-//     cert could be file path to load or cert content in PEM format.
-//   - tls_local_key: (string) private key to use for TLS session.
-//     key could be file path to load or key content in PEM format.
-func GetTlsConfig(opts dictx.Dict) (*tls.Config, error) {
-	if !dictx.Fetch(opts, "tls_enable", false) {
-		return nil, nil
-	}
-
-	tlsConfig := &tls.Config{
-		ClientAuth:         tls.RequireAnyClientCert,
-		InsecureSkipVerify: true,
-		MinVersion:         tls.VersionTLS12,
-		MaxVersion:         tls.VersionTLS13,
-	}
-
-	if dictx.Fetch(opts, "tls_mutual_auth", false) {
-		tlsConfig.ClientAuth = tls.RequireAndVerifyClientCert
-		tlsConfig.InsecureSkipVerify = false
-	}
-	if v := strings.TrimSpace(dictx.Fetch(opts, "tls_server_name", "")); v != "" {
-		tlsConfig.ServerName = v
-	}
-
-	if v := dictx.GetFloat(opts, "tls_min_version", 0); v > 0 {
-		switch v {
-		case 1.0:
-			tlsConfig.MinVersion = tls.VersionTLS10
-		case 1.1:
-			tlsConfig.MinVersion = tls.VersionTLS11
-		case 1.2:
-			tlsConfig.MinVersion = tls.VersionTLS12
-		case 1.3:
-			tlsConfig.MinVersion = tls.VersionTLS13
-		default:
-			return nil, errors.New("invalid tls_min_version value")
-		}
-	}
-	if v := dictx.GetFloat(opts, "tls_max_version", 0); v > 0 {
-		switch v {
-		case 1.0:
-			tlsConfig.MaxVersion = tls.VersionTLS10
-		case 1.1:
-			tlsConfig.MaxVersion = tls.VersionTLS11
-		case 1.2:
-			tlsConfig.MaxVersion = tls.VersionTLS12
-		case 1.3:
-			tlsConfig.MaxVersion = tls.VersionTLS13
-		default:
-			return nil, errors.New("invalid tls_max_version value")
-		}
-	}
-
-	if v := strings.TrimSpace(dictx.Fetch(opts, "tls_ca_certs", "")); v != "" {
-		certPool := x509.NewCertPool()
-
-		for _, crtStr := range strings.Split(v, ",") {
-			crtStr = strings.TrimSpace(crtStr)
-
-			var crtByte []byte
-			var err error
-			if strings.HasPrefix(crtStr, "-----BEGIN") {
-				crtByte = []byte(crtStr)
-			} else {
-				crtByte, err = os.ReadFile(crtStr)
-				if err != nil {
-					return nil, fmt.Errorf(
-						"error loading tls_ca_certs - %v", err)
-				}
-			}
-			if !certPool.AppendCertsFromPEM(crtByte) {
-				return nil, errors.New("invalid tls_ca_certs value")
-			}
-		}
-
-		tlsConfig.RootCAs = certPool
-		tlsConfig.ClientCAs = certPool
-	}
-
-	if crtStr := strings.TrimSpace(
-		dictx.Fetch(opts, "tls_local_cert", "")); crtStr != "" {
-		keyStr := strings.TrimSpace(dictx.Fetch(opts, "tls_local_key", ""))
-		if keyStr == "" {
-			return nil, errors.New("empty tls_local_key value")
-		}
-
-		var cert tls.Certificate
-		var err error
-		if strings.HasPrefix(crtStr, "-----BEGIN") &&
-			strings.HasPrefix(keyStr, "-----BEGIN") {
-			cert, err = tls.X509KeyPair([]byte(crtStr), []byte(keyStr))
-		} else if strings.HasPrefix(crtStr, "-----BEGIN") ||
-			strings.HasPrefix(keyStr, "-----BEGIN") {
-			return nil, errors.New(
-				"both options tls_local_cert and tls_local_key should be " +
-					"file paths or PEM formatted contents for cert and key")
-		} else {
-			cert, err = tls.LoadX509KeyPair(crtStr, keyStr)
-		}
-		if err != nil {
-			return nil, fmt.Errorf(
-				"error loading tls_local_cert, tls_local_key - %v", err)
-		}
-
-		tlsConfig.Certificates = []tls.Certificate{cert}
-	}
-
-	return tlsConfig, nil
-}
-
 /////////////////////////////////////////////////////
 
 // Connection represents a network connection with event support and logging.
 type Connection struct {
-	// Context containing common attributes and functions.
-	*comm.Context
-
 	// uri specifies the resource identifier.
 	uri string
 	// The network type (e.g., tcp, udp).
@@ -231,11 +107,23 @@ type Connection struct {
 	// wgClose defines wait group for close operations.
 	wgClose sync.WaitGroup
 
+	// CommLog is the logger instance for communication data logging.
+	CommLog *logging.Logger
+
+	// PollConfig defines the read polling.
+	PollConfig *comm.PollingConfig
+	// KeepaliveConfig defines the keep-alive probes for TCP connections.
+	KeepaliveConfig *comm.KeepaliveConfig
 	// TlsConfig defines the TLS attributes for TCP connections.
-	tlsConfig *tls.Config
+	TlsConfig *comm.TlsConfig
 }
 
 // NewConnection creates and initializes a new Connection for the given URI.
+//
+// The parsed options are:
+//   - Polling Options: detailed in [comm.ParsePollingConfig]
+//   - Keepalive Options: detailed in [comm.ParseKeepaliveConfig]
+//   - TLS Options: detailed in [comm.ParseTlsConfig]
 func NewConnection(uri string, commlog *logging.Logger, opts dictx.Dict) (*Connection, error) {
 	uri = strings.TrimSpace(uri)
 	network, address, err := ParseUri(uri)
@@ -244,16 +132,28 @@ func NewConnection(uri string, commlog *logging.Logger, opts dictx.Dict) (*Conne
 	}
 
 	c := &Connection{
-		Context: comm.NewContext(commlog, opts),
 		uri:     uri,
 		network: network,
 		address: address,
+		CommLog: commlog,
+	}
+
+	// set polling options
+	c.PollConfig, err = comm.ParsePollingConfig(opts)
+	if err != nil {
+		return nil, err
+	}
+
+	// set keep-alive options
+	c.KeepaliveConfig, err = comm.ParseKeepaliveConfig(opts)
+	if err != nil {
+		return nil, err
 	}
 
 	// set TLS options
 	// only TCP supported now. DTLS requires 3rd party lib
 	if strings.HasPrefix(network, "tcp") {
-		c.tlsConfig, err = GetTlsConfig(opts)
+		c.TlsConfig, err = comm.ParseTlsConfig(opts)
 		if err != nil {
 			return nil, err
 		}
@@ -308,10 +208,11 @@ func (c *Connection) Open(timeout float64) error {
 	}
 
 	dialer := net.Dialer{
-		KeepAlive: 0, // enabled by default with defaults
+		KeepAlive: -1, // disabled
 	}
-	if v := dictx.GetFloat(c.Options, "keepalive_interval", 0); v >= 0 {
-		dialer.KeepAlive = time.Duration(v * float64(time.Second))
+	if c.KeepaliveConfig.Interval >= 0 {
+		dialer.KeepAlive = time.Duration(
+			c.KeepaliveConfig.Interval * int(time.Second))
 	}
 	if timeout > 0 {
 		dialer.Timeout = time.Duration(timeout * float64(time.Second))
@@ -323,8 +224,8 @@ func (c *Connection) Open(timeout float64) error {
 		return fmt.Errorf("%w, %v", comm.ErrConnection, err)
 	}
 	// set tls config for connection
-	if c.tlsConfig != nil {
-		conn = tls.Client(conn, c.tlsConfig)
+	if c.TlsConfig != nil {
+		conn = tls.Client(conn, c.TlsConfig)
 		comm.LogMsg(c.CommLog, "CONNECTED TLS -- %s", c.uri)
 	} else {
 		comm.LogMsg(c.CommLog, "CONNECTED -- %s", c.uri)
@@ -479,9 +380,9 @@ func (c *Connection) RecvFrom(timeout float64) ([]byte, any, error) {
 	c.breakRecvEvent.Store(false)
 
 	// determine read buffer size and polling timeout
-	nRead := c.PollChunkSize
-	if c.PollMaxSize > 0 {
-		nRead = c.PollMaxSize
+	nRead := c.PollConfig.ChunkSize
+	if c.PollConfig.MaxSize > 0 {
+		nRead = c.PollConfig.MaxSize
 	}
 
 	// set read polling duration and deadline
@@ -491,15 +392,12 @@ func (c *Connection) RecvFrom(timeout float64) ([]byte, any, error) {
 	// no polling for packet session-less connections
 	if _, ok := c.netConn.(net.PacketConn); ok {
 		if timeout > 0 {
-			tPolling = time.Duration(timeout * float64(time.Second))
-			tDeadline = time.Now().Add(tPolling)
+			tDeadline = time.Now().Add(
+				time.Duration(timeout * float64(time.Second)))
 		}
 	} else {
-		if c.PollTimeout > 0 {
-			tPolling = time.Duration(c.PollTimeout * float64(time.Second))
-		} else {
-			tPolling = time.Duration(comm.POLL_TIMEOUT * float64(time.Second))
-		}
+		tPolling = time.Duration(
+			c.PollConfig.Timeout * float64(time.Second))
 		if timeout > 0 {
 			tDeadline = time.Now().Add(
 				time.Duration(timeout * float64(time.Second)))
@@ -542,7 +440,7 @@ func (c *Connection) RecvFrom(timeout float64) ([]byte, any, error) {
 			if _, ok := c.netConn.(net.PacketConn); ok {
 				break
 			}
-			if c.PollMaxSize > 0 {
+			if c.PollConfig.MaxSize > 0 {
 				nRead -= n
 				if nRead <= 0 {
 					break
@@ -574,9 +472,6 @@ func (c *Connection) RecvFrom(timeout float64) ([]byte, any, error) {
 // Listener represents a network listener that handles incoming connections
 // with a custom connection handler.
 type Listener struct {
-	// Context containing common attributes such as logging and events.
-	*comm.Context
-
 	// uri specifies the resource identifier.
 	uri string
 	// The network type (e.g., tcp, udp).
@@ -597,11 +492,26 @@ type Listener struct {
 	// muState defines mutex for state change operations (start/stop).
 	muState sync.Mutex
 
+	// CommLog is the logger instance for communication data logging.
+	CommLog *logging.Logger
+
+	// PollConfig defines the read polling.
+	PollConfig *comm.PollingConfig
+	// LimiterConfig defines the limits for TCP connections.
+	LimiterConfig *comm.LimiterConfig
+	// KeepaliveConfig defines the keep-alive probes for TCP connections.
+	KeepaliveConfig *comm.KeepaliveConfig
 	// TlsConfig defines the TLS attributes for TCP connections.
-	tlsConfig *tls.Config
+	TlsConfig *comm.TlsConfig
 }
 
 // NewListener creates a new network Listener.
+//
+// The parsed options are:
+//   - Polling Options: detailed in [comm.ParsePollingConfig]
+//   - Limiter Options: detailed in [comm.ParseLimiterConfig]
+//   - Keepalive Options: detailed in [comm.ParseKeepaliveConfig]
+//   - TLS Options: detailed in [comm.ParseTlsConfig]
 func NewListener(uri string, commlog *logging.Logger, opts dictx.Dict) (*Listener, error) {
 	uri = strings.TrimSpace(uri)
 	network, address, err := ParseUri(uri)
@@ -610,16 +520,34 @@ func NewListener(uri string, commlog *logging.Logger, opts dictx.Dict) (*Listene
 	}
 
 	l := &Listener{
-		Context: comm.NewContext(commlog, opts),
 		uri:     uri,
 		network: network,
 		address: address,
+		CommLog: commlog,
+	}
+
+	// set polling options
+	l.PollConfig, err = comm.ParsePollingConfig(opts)
+	if err != nil {
+		return nil, err
+	}
+
+	// set limiter options
+	l.LimiterConfig, err = comm.ParseLimiterConfig(opts)
+	if err != nil {
+		return nil, err
+	}
+
+	// set keep-alive options
+	l.KeepaliveConfig, err = comm.ParseKeepaliveConfig(opts)
+	if err != nil {
+		return nil, err
 	}
 
 	// set TLS config for connection
 	// only TCP supported now. DTLS requires 3rd party lib
 	if strings.HasPrefix(network, "tcp") {
-		l.tlsConfig, err = GetTlsConfig(opts)
+		l.TlsConfig, err = comm.ParseTlsConfig(opts)
 		if err != nil {
 			return nil, err
 		}
@@ -662,8 +590,9 @@ func (l *Listener) startListener() error {
 	lConfig := net.ListenConfig{
 		KeepAlive: -1, // disabled
 	}
-	if v := dictx.GetFloat(l.Options, "keepalive_interval", -1); v >= 0 {
-		lConfig.KeepAlive = time.Duration(v * float64(time.Second))
+	if l.KeepaliveConfig.Interval >= 0 {
+		lConfig.KeepAlive = time.Duration(
+			l.KeepaliveConfig.Interval * int(time.Second))
 	}
 
 	// net listener
@@ -673,12 +602,13 @@ func (l *Listener) startListener() error {
 		return err
 	}
 	// set connection limit
-	if v := dictx.GetInt(l.Options, "connections_limit", 0); v > 0 {
-		netListener = netutil.LimitListener(netListener, v)
+	if l.LimiterConfig.SimultaneousConn > 0 {
+		netListener = netutil.LimitListener(
+			netListener, l.LimiterConfig.SimultaneousConn)
 	}
 	// set tls config for listener
-	if l.tlsConfig != nil {
-		netListener = tls.NewListener(netListener, l.tlsConfig)
+	if l.TlsConfig != nil {
+		netListener = tls.NewListener(netListener, l.TlsConfig)
 		comm.LogMsg(l.CommLog, "LISTENING TLS -- %s", l.uri)
 	} else {
 		comm.LogMsg(l.CommLog, "LISTENING -- %s", l.uri)
@@ -713,17 +643,19 @@ func (l *Listener) startListener() error {
 		// handle new connection
 		wg.Add(1)
 		go func(conn net.Conn) {
-			uri := fmt.Sprintf("%s@%s", l.network, conn.RemoteAddr())
-			c, err := NewConnection(uri, nil, l.Options)
-			if err != nil {
-				comm.LogMsg(l.CommLog, "CONN_ERROR -- %v", err)
-				conn.Close()
-				return
+			address := fmt.Sprint(conn.RemoteAddr())
+			uri := fmt.Sprintf("%s@%s", l.network, address)
+			c := &Connection{
+				uri:             uri,
+				network:         l.network,
+				address:         address,
+				netConn:         conn,
+				PollConfig:      l.PollConfig,
+				KeepaliveConfig: l.KeepaliveConfig,
 			}
 			if l.CommLog != nil {
 				c.CommLog = l.CommLog.SubLogger(uri)
 			}
-			c.netConn = conn
 			c.parent = l
 			c.isOpened.Store(true)
 			comm.LogMsg(c.CommLog, "CONNECTED")
@@ -742,7 +674,9 @@ func (l *Listener) startListener() error {
 }
 
 func (l *Listener) startPacketConn() error {
-	var lConfig net.ListenConfig
+	lConfig := net.ListenConfig{
+		KeepAlive: -1, // disabled
+	}
 
 	// packet connection
 	packetConn, err := lConfig.ListenPacket(
@@ -755,11 +689,11 @@ func (l *Listener) startPacketConn() error {
 	comm.LogMsg(l.CommLog, "LISTENING -- %s", l.uri)
 
 	c := &Connection{
-		Context: comm.NewContext(l.CommLog, l.Options),
-		uri:     l.uri,
-		network: l.network,
-		address: l.address,
-		netConn: packetConn,
+		uri:        l.uri,
+		network:    l.network,
+		address:    l.address,
+		netConn:    packetConn,
+		PollConfig: l.PollConfig,
 	}
 	c.parent = l
 	c.isOpened.Store(true)

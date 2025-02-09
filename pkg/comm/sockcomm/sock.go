@@ -49,9 +49,6 @@ func GetAddr(path string) (net.Addr, error) {
 
 // Connection represents a net socket connection with event support and logging.
 type Connection struct {
-	// Context containing common attributes and functions.
-	*comm.Context
-
 	// uri specifies the resource identifier.
 	uri string
 	// The file system path for net socket.
@@ -77,9 +74,18 @@ type Connection struct {
 	muRecv sync.Mutex
 	// wgClose defines wait group for close operations.
 	wgClose sync.WaitGroup
+
+	// CommLog is the logger instance for communication data logging.
+	CommLog *logging.Logger
+
+	// PollConfig defines the read polling.
+	PollConfig *comm.PollingConfig
 }
 
 // NewConnection creates and initializes a new Connection for the given URI.
+//
+// The parsed options are:
+//   - Polling Options: detailed in [comm.ParsePollingConfig]
 func NewConnection(uri string, commlog *logging.Logger, opts dictx.Dict) (*Connection, error) {
 	uri = strings.TrimSpace(uri)
 	path, err := ParseUri(uri)
@@ -88,9 +94,15 @@ func NewConnection(uri string, commlog *logging.Logger, opts dictx.Dict) (*Conne
 	}
 
 	c := &Connection{
-		Context: comm.NewContext(commlog, opts),
 		uri:     uri,
 		path:    path,
+		CommLog: commlog,
+	}
+
+	// set polling options
+	c.PollConfig, err = comm.ParsePollingConfig(opts)
+	if err != nil {
+		return nil, err
 	}
 
 	return c, nil
@@ -278,19 +290,17 @@ func (c *Connection) RecvFrom(timeout float64) ([]byte, any, error) {
 	c.breakRecvEvent.Store(false)
 
 	// determine read buffer size and polling timeout
-	nRead := c.PollChunkSize
-	if c.PollMaxSize > 0 {
-		nRead = c.PollMaxSize
+	nRead := c.PollConfig.ChunkSize
+	if c.PollConfig.MaxSize > 0 {
+		nRead = c.PollConfig.MaxSize
 	}
 
 	// set read polling duration and deadline
 	var tPolling time.Duration
 	var tDeadline time.Time
 
-	tPolling = time.Duration(c.PollTimeout * float64(time.Second))
-	if tPolling <= 0 {
-		tPolling = time.Duration(comm.POLL_TIMEOUT * float64(time.Second))
-	}
+	tPolling = time.Duration(
+		c.PollConfig.Timeout * float64(time.Second))
 	if timeout > 0 {
 		tDeadline = time.Now().Add(
 			time.Duration(timeout * float64(time.Second)))
@@ -317,7 +327,7 @@ func (c *Connection) RecvFrom(timeout float64) ([]byte, any, error) {
 
 		if n > 0 {
 			data = append(data, b[:n]...)
-			if c.PollMaxSize > 0 {
+			if c.PollConfig.MaxSize > 0 {
 				nRead -= n
 				if nRead <= 0 {
 					break
@@ -349,9 +359,6 @@ func (c *Connection) RecvFrom(timeout float64) ([]byte, any, error) {
 // Listener represents a net socket listener that handles incoming connections
 // with a custom connection handler.
 type Listener struct {
-	// Context containing common attributes such as logging and events.
-	*comm.Context
-
 	// uri specifies the resource identifier.
 	uri string
 	// The file system path of net socket to listen on.
@@ -369,9 +376,21 @@ type Listener struct {
 
 	// muState defines mutex for state change operations (start/stop).
 	muState sync.Mutex
+
+	// CommLog is the logger instance for communication data logging.
+	CommLog *logging.Logger
+
+	// PollConfig defines the read polling.
+	PollConfig *comm.PollingConfig
+	// LimiterConfig defines the limits for TCP connections.
+	LimiterConfig *comm.LimiterConfig
 }
 
 // NewListener creates a new Listener.
+//
+// The parsed options are:
+//   - Polling Options: detailed in [comm.ParsePollingConfig]
+//   - Limiter Options: detailed in [comm.ParseLimiterConfig]
 func NewListener(uri string, commlog *logging.Logger, opts dictx.Dict) (*Listener, error) {
 	uri = strings.TrimSpace(uri)
 	path, err := ParseUri(uri)
@@ -380,9 +399,21 @@ func NewListener(uri string, commlog *logging.Logger, opts dictx.Dict) (*Listene
 	}
 
 	l := &Listener{
-		Context: comm.NewContext(commlog, opts),
 		uri:     uri,
 		path:    path,
+		CommLog: commlog,
+	}
+
+	// set polling options
+	l.PollConfig, err = comm.ParsePollingConfig(opts)
+	if err != nil {
+		return nil, err
+	}
+
+	// set limiter options
+	l.LimiterConfig, err = comm.ParseLimiterConfig(opts)
+	if err != nil {
+		return nil, err
 	}
 
 	return l, nil
@@ -422,9 +453,6 @@ func (l *Listener) startListener() error {
 	lConfig := net.ListenConfig{
 		KeepAlive: -1, // disabled
 	}
-	if v := dictx.GetFloat(l.Options, "keepalive_interval", -1); v >= 0 {
-		lConfig.KeepAlive = time.Duration(v * float64(time.Second))
-	}
 
 	// net listener
 	netListener, err := lConfig.Listen(
@@ -433,8 +461,9 @@ func (l *Listener) startListener() error {
 		return err
 	}
 	// set connection limit
-	if v := dictx.GetInt(l.Options, "connections_limit", 0); v > 0 {
-		netListener = netutil.LimitListener(netListener, v)
+	if l.LimiterConfig.SimultaneousConn > 0 {
+		netListener = netutil.LimitListener(
+			netListener, l.LimiterConfig.SimultaneousConn)
 	}
 	comm.LogMsg(l.CommLog, "LISTENING -- %s", l.uri)
 	l.netListener = netListener
@@ -468,14 +497,13 @@ func (l *Listener) startListener() error {
 		// handle new connection
 		wg.Add(1)
 		go func(conn net.Conn) {
-			uri := fmt.Sprintf("%s@%s", l.Type(), conn.RemoteAddr())
-			c, err := NewConnection(uri, l.CommLog, l.Options)
-			if err != nil {
-				comm.LogMsg(l.CommLog, "CONN_ERROR -- %v", err)
-				conn.Close()
-				return
+			c := &Connection{
+				uri:        l.uri,
+				path:       l.path,
+				netConn:    conn,
+				CommLog:    l.CommLog,
+				PollConfig: l.PollConfig,
 			}
-			c.netConn = conn
 			c.parent = l
 			c.isOpened.Store(true)
 			comm.LogMsg(c.CommLog, "CONNECTED")
