@@ -15,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/exonlabs/go-utils/pkg/abc/gx"
 	"golang.org/x/sys/unix"
 )
 
@@ -52,29 +53,29 @@ func (p *NamedPipe) close() {
 // cancel/close events or an error occurs.
 // timeout=0 waits forever until data is received.
 func (p *NamedPipe) Read(timeout float64) ([]byte, error) {
-	var data []byte
+	// Acquire lock
+	p.mu.Lock()
+	defer p.mu.Unlock()
 
-	// set read polling timeout
-	var tPoll float64
-	if p.PollTimeout > 0 {
-		tPoll = p.PollTimeout
-	} else {
-		tPoll = POLL_TIMEOUT
-	}
+	p.breakEvent.Clear()
 
-	// set dynamic data read size
+	// determine read buffer size
 	nRead := p.PollChunkSize
 	if p.PollMaxSize > 0 {
 		nRead = p.PollMaxSize
 	}
 
-	// set timeout for the overall read wait if no data received
-	var tBreak float64
+	// set read polling duration and deadline
+	var tPolling float64
+	var tDeadline time.Time
+
+	tPolling = gx.Max(0.01, p.PollTimeout)
 	if timeout > 0 {
-		tBreak = float64(time.Now().Unix()) + timeout
+		tDeadline = time.Now().Add(
+			time.Duration(timeout * float64(time.Second)))
 	}
 
-	p.breakEvent.Clear()
+	var data []byte
 	for {
 		// open pipe for read if not already openned
 		if p.fd == nil {
@@ -102,13 +103,11 @@ func (p *NamedPipe) Read(timeout float64) ([]byte, error) {
 			}
 		}
 
-		if !p.breakEvent.Wait(tPoll) {
+		if !p.breakEvent.Wait(tPolling) {
 			return nil, ErrBreak
 		}
-		if timeout > 0 {
-			if float64(time.Now().Unix()) >= tBreak {
-				return nil, ErrTimeout
-			}
+		if timeout > 0 && time.Now().After(tDeadline) {
+			return nil, ErrTimeout
 		}
 	}
 
@@ -119,21 +118,22 @@ func (p *NamedPipe) Read(timeout float64) ([]byte, error) {
 // cancel/close events or an error occurs.
 // timeout=0 waits forever until data is written.
 func (p *NamedPipe) Write(data []byte, timeout float64) error {
-	// set write polling timeout
-	var tPoll float64
-	if p.PollTimeout > 0 {
-		tPoll = p.PollTimeout
-	} else {
-		tPoll = POLL_TIMEOUT
-	}
-
-	// set timeout for the overall write wait if no data written
-	var tBreak float64
-	if timeout > 0 {
-		tBreak = float64(time.Now().Unix()) + timeout
-	}
+	// Acquire lock
+	p.mu.Lock()
+	defer p.mu.Unlock()
 
 	p.breakEvent.Clear()
+
+	// set write polling duration and deadline
+	var tPolling float64
+	var tDeadline time.Time
+
+	tPolling = gx.Max(0.01, p.PollTimeout)
+	if timeout > 0 {
+		tDeadline = time.Now().Add(
+			time.Duration(timeout * float64(time.Second)))
+	}
+
 	for {
 		// open pipe for write if not already openned
 		if p.fd == nil {
@@ -149,13 +149,11 @@ func (p *NamedPipe) Write(data []byte, timeout float64) error {
 			return nil
 		}
 
-		if !p.breakEvent.Wait(tPoll) {
+		if !p.breakEvent.Wait(tPolling) {
 			return ErrBreak
 		}
-		if timeout > 0 {
-			if float64(time.Now().Unix()) >= tBreak {
-				return ErrTimeout
-			}
+		if timeout > 0 && time.Now().After(tDeadline) {
+			return ErrTimeout
 		}
 	}
 }
