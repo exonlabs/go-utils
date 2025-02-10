@@ -55,7 +55,7 @@ func _print(msg string, data any) {
 	fmt.Println(string(b))
 }
 
-func NewConfig() *jconfig.Config {
+func NewConfig() *jconfig.JConfig {
 	cfg, _ := jconfig.New(CFGFILE, DEFAULTS)
 	cfg.InitAES128(SECRET)
 	return cfg

@@ -11,7 +11,7 @@ import (
 	"github.com/exonlabs/go-utils/pkg/jconfig"
 )
 
-func ExampleConfig_SetSecure() {
+func ExampleJConfig_SetSecure() {
 	cfg, _ := jconfig.New("config.json", dictx.Dict{})
 	cfg.InitAES128("thisis128bitkey!!")
 
@@ -25,7 +25,7 @@ func ExampleConfig_SetSecure() {
 	// Output: map[password:secret username:admin]
 }
 
-func ExampleConfig_GetSecure() {
+func ExampleJConfig_GetSecure() {
 	cfg, _ := jconfig.New("config.json", dictx.Dict{})
 	cfg.InitAES128("thisis128bitkey!!")
 

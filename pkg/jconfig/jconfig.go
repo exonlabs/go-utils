@@ -16,18 +16,18 @@ import (
 	"github.com/exonlabs/go-utils/pkg/ciphering"
 )
 
-// Config represents a configuration manager that handles loading,
+// JConfig represents a configuration manager that handles loading,
 // saving, and backing up configuration data.
-type Config struct {
+type JConfig struct {
 	Buffer  dictx.Dict        // Holds the current configuration in memory
 	cfgPath string            // Path to the main configuration file
 	bakPath string            // Path to the backup configuration file (optional)
 	cipher  ciphering.Handler // Cipher handler for encryption and decryption (optional)
 }
 
-// New creates a new Config instance with the provided file path and default values.
+// New creates a new JConfig instance with the provided file path and default values.
 // Returns an error if the file path is empty.
-func New(path string, defaults dictx.Dict) (*Config, error) {
+func New(path string, defaults dictx.Dict) (*JConfig, error) {
 	path = filepath.Clean(path)
 	if path == "" {
 		return nil, errors.New("config file path cannot be empty")
@@ -35,7 +35,7 @@ func New(path string, defaults dictx.Dict) (*Config, error) {
 	if defaults == nil {
 		defaults = dictx.Dict{}
 	}
-	return &Config{
+	return &JConfig{
 		Buffer:  defaults,
 		cfgPath: path,
 	}, nil
@@ -43,7 +43,7 @@ func New(path string, defaults dictx.Dict) (*Config, error) {
 
 // InitBackup sets the backup file path for the configuration.
 // Returns an error if the provided path is empty.
-func (c *Config) InitBackup(path string) error {
+func (c *JConfig) InitBackup(path string) error {
 	path = filepath.Clean(path)
 	if path == "" {
 		return errors.New("config backup path cannot be empty")
@@ -54,18 +54,18 @@ func (c *Config) InitBackup(path string) error {
 
 // EnableBackup enables automatic backup by creating a backup file
 // at the same path as the config file, with a `.backup` suffix.
-func (c *Config) EnableBackup() {
+func (c *JConfig) EnableBackup() {
 	c.bakPath = c.cfgPath + ".backup"
 }
 
 // IsExist checks whether the main configuration file exists.
-func (c *Config) IsExist() bool {
+func (c *JConfig) IsExist() bool {
 	_, err := os.Stat(c.cfgPath)
 	return !os.IsNotExist(err)
 }
 
 // IsBackupExist checks whether the backup file exists.
-func (c *Config) IsBackupExist() bool {
+func (c *JConfig) IsBackupExist() bool {
 	if c.bakPath != "" {
 		_, err := os.Stat(c.bakPath)
 		return !os.IsNotExist(err)
@@ -75,7 +75,7 @@ func (c *Config) IsBackupExist() bool {
 
 // load merges the provided byte slice into the current buffer
 // after unmarshalling it from JSON.
-func (c *Config) load(b []byte) error {
+func (c *JConfig) load(b []byte) error {
 	if len(b) == 0 {
 		return nil
 	}
@@ -92,7 +92,7 @@ func (c *Config) load(b []byte) error {
 // Load reads the configuration from the main file and loads it into memory.
 // If the main config fails to load, attempts to load from a backup file.
 // Also saves the loaded data back to the backup if successful.
-func (c *Config) Load() error {
+func (c *JConfig) Load() error {
 	var b []byte
 	var err error
 
@@ -125,7 +125,7 @@ func (c *Config) Load() error {
 // Save serializes the current buffer to a formatted JSON byte slice,
 // then writes the configuration buffer to both the main file
 // and the backup file (if a backup path is set).
-func (c *Config) Save() error {
+func (c *JConfig) Save() error {
 	b, err := json.MarshalIndent(c.Buffer, "", "  ")
 	if err != nil {
 		return err
@@ -141,37 +141,37 @@ func (c *Config) Save() error {
 }
 
 // Keys returns a list of all keys in the configuration buffer.
-func (c *Config) Keys() []string {
+func (c *JConfig) Keys() []string {
 	return dictx.KeysN(c.Buffer, -1)
 }
 
 // Get retrieves a value from the configuration buffer by key.
 // If the key is not found, the default_value is returned.
-func (c *Config) Get(key string, defaultValue any) any {
+func (c *JConfig) Get(key string, defaultValue any) any {
 	return dictx.Get(c.Buffer, key, defaultValue)
 }
 
 // Set adds a new value in the configuration buffer by key.
 // If the key already exists, its value is overwritten.
-func (c *Config) Set(key string, newValue any) {
+func (c *JConfig) Set(key string, newValue any) {
 	dictx.Set(c.Buffer, key, newValue)
 }
 
 // Merge updates a configuration buffer recursively with an update dictionary.
 // It merges keys and values, allowing nested dictionaries to be updated as well.
-func (c *Config) Merge(updt dictx.Dict) {
+func (c *JConfig) Merge(updt dictx.Dict) {
 	dictx.Merge(c.Buffer, updt)
 }
 
 // Delete removes a key from the configuration buffer if it exists.
 // It supports nested keys using the separator.
-func (c *Config) Delete(key string) {
+func (c *JConfig) Delete(key string) {
 	dictx.Delete(c.Buffer, key)
 }
 
 // Purge clears the configuration buffer and deletes the main and
 // backup files (if they exist).
-func (c *Config) Purge() error {
+func (c *JConfig) Purge() error {
 	c.Buffer = dictx.Dict{}
 	if c.IsBackupExist() {
 		os.Remove(c.bakPath)
@@ -187,7 +187,7 @@ func (c *Config) Purge() error {
 // InitAES128 initializes AES-128 encryption for the configuration
 // using the provided secret key.
 // Returns an error if the secret is invalid or encryption setup fails.
-func (c *Config) InitAES128(secret string) error {
+func (c *JConfig) InitAES128(secret string) error {
 	cipher, err := ciphering.NewAES128(secret)
 	if err != nil {
 		return err
@@ -199,7 +199,7 @@ func (c *Config) InitAES128(secret string) error {
 // InitAES256 initializes AES-256 encryption for the configuration
 // using the provided secret key.
 // Returns an error if the secret is invalid or encryption setup fails.
-func (c *Config) InitAES256(secret string) error {
+func (c *JConfig) InitAES256(secret string) error {
 	cipher, err := ciphering.NewAES256(secret)
 	if err != nil {
 		return err
@@ -211,7 +211,7 @@ func (c *Config) InitAES256(secret string) error {
 // GetSecure retrieves and decrypts a secure value by key from the configuration.
 // If the key does not exist or decryption fails, it returns the defaultValue.
 // Returns an error if encryption is not configured or the value format is invalid.
-func (c *Config) GetSecure(key string, defaultValue any) (any, error) {
+func (c *JConfig) GetSecure(key string, defaultValue any) (any, error) {
 	if c.cipher == nil {
 		return nil, fmt.Errorf("ciphering is not configured")
 	}
@@ -245,7 +245,7 @@ func (c *Config) GetSecure(key string, defaultValue any) (any, error) {
 // SetSecure encrypts and stores a secure value by key in the configuration.
 // The key is created if it doesn't exist.
 // Returns an error if encryption is not configured.
-func (c *Config) SetSecure(key string, val any) error {
+func (c *JConfig) SetSecure(key string, val any) error {
 	if c.cipher == nil {
 		return fmt.Errorf("ciphering is not configured")
 	}
