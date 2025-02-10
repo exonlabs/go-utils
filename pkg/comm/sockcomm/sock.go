@@ -289,7 +289,7 @@ func (c *Connection) RecvFrom(timeout float64) ([]byte, any, error) {
 
 	c.breakRecvEvent.Store(false)
 
-	// determine read buffer size and polling timeout
+	// determine read buffer size
 	nRead := c.PollConfig.ChunkSize
 	if c.PollConfig.MaxSize > 0 {
 		nRead = c.PollConfig.MaxSize
