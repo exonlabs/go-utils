@@ -137,7 +137,7 @@ func TestFormatterEmit(t *testing.T) {
 	tests := []struct {
 		name      string
 		formatter logging.Formatter
-		level     int
+		level     logging.Level
 		source    string
 		message   string
 		expected  string

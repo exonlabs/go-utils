@@ -16,7 +16,7 @@ const (
 )
 
 // Formatter defines function for formatting log record into messages.
-type Formatter func(ts time.Time, lvl int, src, msg string) string
+type Formatter func(ts time.Time, lvl Level, src, msg string) string
 
 // StdFormatter generates a standard text formatted log message.
 // Format: {time} {level} [{source}] {message}
@@ -24,9 +24,9 @@ type Formatter func(ts time.Time, lvl int, src, msg string) string
 // Example:
 //
 //	2006-01-02 15:04:05.000000 INFO [logger_name] log message
-func StdFormatter(ts time.Time, lvl int, src, msg string) string {
+func StdFormatter(ts time.Time, lvl Level, src, msg string) string {
 	return fmt.Sprintf("%s %-5s [%s] %s",
-		ts.Format(STD_TIME_FORMAT), LEVEL(lvl), src, msg)
+		ts.Format(STD_TIME_FORMAT), lvl, src, msg)
 }
 
 // BasicFormatter generates a basic formatted text log message.
@@ -35,9 +35,9 @@ func StdFormatter(ts time.Time, lvl int, src, msg string) string {
 // Example:
 //
 //	2006-01-02 15:04:05.000000 INFO log message
-func BasicFormatter(ts time.Time, lvl int, src, msg string) string {
+func BasicFormatter(ts time.Time, lvl Level, src, msg string) string {
 	return fmt.Sprintf("%s %-5s %s",
-		ts.Format(STD_TIME_FORMAT), LEVEL(lvl), msg)
+		ts.Format(STD_TIME_FORMAT), lvl, msg)
 }
 
 // RawFormatter generates a minimal formatted text log message.
@@ -46,7 +46,7 @@ func BasicFormatter(ts time.Time, lvl int, src, msg string) string {
 // Example:
 //
 //	2006-01-02 15:04:05.000000 log message
-func RawFormatter(ts time.Time, lvl int, src, msg string) string {
+func RawFormatter(ts time.Time, lvl Level, src, msg string) string {
 	return fmt.Sprintf("%s %s",
 		ts.Format(STD_TIME_FORMAT), msg)
 }
@@ -56,10 +56,10 @@ func RawFormatter(ts time.Time, lvl int, src, msg string) string {
 // Example:
 //
 //	{"time": "2006-01-02 15:04:05.000000", "level": "INFO", "source": "logger_name", "message": "log message"}
-func JsonFormatter(ts time.Time, lvl int, src, msg string) string {
+func JsonFormatter(ts time.Time, lvl Level, src, msg string) string {
 	msg = strings.ReplaceAll(msg, `\`, `\\`)
 	msg = strings.ReplaceAll(msg, `"`, `\"`)
 	return fmt.Sprintf(
 		`{"time": "%s", "level": "%s", "source": "%s", "message": "%s"}`,
-		ts.Format(STD_TIME_FORMAT), LEVEL(lvl), src, msg)
+		ts.Format(STD_TIME_FORMAT), lvl, src, msg)
 }

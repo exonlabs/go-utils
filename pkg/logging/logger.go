@@ -10,31 +10,33 @@ import (
 	"time"
 )
 
+type Level int8
+
 const (
-	// Predefined log levels.
-	TRACE = int(-2) // Trace level
-	DEBUG = int(-1) // Debug level
-	INFO  = int(0)  // Info level
-	WARN  = int(1)  // Warning level
-	ERROR = int(2)  // Error level
-	FATAL = int(3)  // Fatal level
-	PANIC = int(4)  // Panic level
+	// Defined log levels.
+	TRACE = Level(-2) // Trace level
+	DEBUG = Level(-1) // Debug level
+	INFO  = Level(0)  // Info level
+	WARN  = Level(1)  // Warning level
+	ERROR = Level(2)  // Error level
+	FATAL = Level(3)  // Fatal level
+	PANIC = Level(4)  // Panic level
 )
 
-// LEVEL returns the string representation of the log level.
-func LEVEL(lvl int) string {
+// returns the string representation of the log level.
+func (l Level) String() string {
 	switch {
-	case lvl >= PANIC:
+	case l >= PANIC:
 		return "PANIC"
-	case lvl >= FATAL:
+	case l >= FATAL:
 		return "FATAL"
-	case lvl >= ERROR:
+	case l >= ERROR:
 		return "ERROR"
-	case lvl >= WARN:
+	case l >= WARN:
 		return "WARN"
-	case lvl >= INFO:
+	case l >= INFO:
 		return "INFO"
-	case lvl >= DEBUG:
+	case l >= DEBUG:
 		return "DEBUG"
 	default:
 		return "TRACE"
@@ -46,7 +48,7 @@ func LEVEL(lvl int) string {
 // handlers and to its parent logger.
 type Logger struct {
 	name      string    // Logger name
-	Level     int       // Logger level
+	Level     Level     // Logger level
 	Prefix    string    // an optional prefix for all logger records
 	Suffix    string    // an optional suffix for all logger records
 	formatter Formatter // Formatter for generating log messages
@@ -140,11 +142,11 @@ func (l *Logger) ClearHandlers() {
 }
 
 // Log handles a log message, sending it to all handlers and parents.
-func (l *Logger) Log(level int, msg string) error {
+func (l *Logger) Log(lvl Level, msg string) error {
 	var errAll error
 
 	// process record by local handlers
-	if level >= l.Level && l.handlers != nil {
+	if lvl >= l.Level && l.handlers != nil {
 		for _, h := range l.handlers {
 			if err := h.HandleMessage(msg); err != nil {
 				// Combine errors
@@ -155,7 +157,7 @@ func (l *Logger) Log(level int, msg string) error {
 
 	// Propagate to parent logger
 	if l.parent != nil {
-		if err := l.parent.Log(level, msg); err != nil {
+		if err := l.parent.Log(lvl, msg); err != nil {
 			errAll = errors.Join(errAll, err)
 		}
 	}

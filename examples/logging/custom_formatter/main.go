@@ -21,19 +21,19 @@ func log_messages(logger *logging.Logger) {
 	logger.Trace("logging message type: %s", "trace")
 }
 
-func formatter1(ts time.Time, lvl int, src, msg string) string {
+func formatter1(ts time.Time, lvl logging.Level, src, msg string) string {
 	return fmt.Sprintf("%s %-5s -- %s",
-		ts.Format("2006/01/02 15:04:05"), logging.LEVEL(lvl), msg)
+		ts.Format("2006/01/02 15:04:05"), lvl, msg)
 }
 
-func formatter2(ts time.Time, lvl int, src, msg string) string {
+func formatter2(ts time.Time, lvl logging.Level, src, msg string) string {
 	return fmt.Sprintf("%s -- [%-5s] -- %s",
-		ts.Format("2006-01-02 15:04:05"), logging.LEVEL(lvl), msg)
+		ts.Format("2006-01-02 15:04:05"), lvl, msg)
 }
 
-func formatter3(ts time.Time, lvl int, src, msg string) string {
+func formatter3(ts time.Time, lvl logging.Level, src, msg string) string {
 	return fmt.Sprintf(`{"time": "%s", "lvl": "%s", "msg": "%s"}`,
-		ts.Format("2006-01-02 15:04:05"), logging.LEVEL(lvl), msg)
+		ts.Format("2006-01-02 15:04:05"), lvl, msg)
 }
 
 func main() {
