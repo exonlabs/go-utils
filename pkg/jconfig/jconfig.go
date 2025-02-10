@@ -16,12 +16,10 @@ import (
 	"github.com/exonlabs/go-utils/pkg/ciphering"
 )
 
-type Dict = dictx.Dict
-
 // Config represents a configuration manager that handles loading,
 // saving, and backing up configuration data.
 type Config struct {
-	Buffer  Dict              // Holds the current configuration in memory
+	Buffer  dictx.Dict        // Holds the current configuration in memory
 	cfgPath string            // Path to the main configuration file
 	bakPath string            // Path to the backup configuration file (optional)
 	cipher  ciphering.Handler // Cipher handler for encryption and decryption (optional)
@@ -29,13 +27,13 @@ type Config struct {
 
 // New creates a new Config instance with the provided file path and default values.
 // Returns an error if the file path is empty.
-func New(path string, defaults Dict) (*Config, error) {
+func New(path string, defaults dictx.Dict) (*Config, error) {
 	path = filepath.Clean(path)
 	if path == "" {
 		return nil, errors.New("config file path cannot be empty")
 	}
 	if defaults == nil {
-		defaults = Dict{}
+		defaults = dictx.Dict{}
 	}
 	return &Config{
 		Buffer:  defaults,
@@ -161,7 +159,7 @@ func (c *Config) Set(key string, newValue any) {
 
 // Merge updates a configuration buffer recursively with an update dictionary.
 // It merges keys and values, allowing nested dictionaries to be updated as well.
-func (c *Config) Merge(updt Dict) {
+func (c *Config) Merge(updt dictx.Dict) {
 	dictx.Merge(c.Buffer, updt)
 }
 
@@ -174,7 +172,7 @@ func (c *Config) Delete(key string) {
 // Purge clears the configuration buffer and deletes the main and
 // backup files (if they exist).
 func (c *Config) Purge() error {
-	c.Buffer = Dict{}
+	c.Buffer = dictx.Dict{}
 	if c.IsBackupExist() {
 		os.Remove(c.bakPath)
 	}
