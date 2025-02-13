@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 
 	"github.com/exonlabs/go-utils/pkg/abc/dictx"
@@ -19,10 +18,11 @@ import (
 // JConfig represents a configuration manager that handles loading,
 // saving, and backing up configuration data.
 type JConfig struct {
-	Buffer  dictx.Dict        // Holds the current configuration in memory
-	cfgPath string            // Path to the main configuration file
-	bakPath string            // Path to the backup configuration file (optional)
-	cipher  ciphering.Handler // Cipher handler for encryption and decryption (optional)
+	Buffer   dictx.Dict        // Holds the current configuration in memory
+	cfgPath  string            // Path to the main configuration file
+	bakPath  string            // Path to the backup configuration file (optional)
+	fhandler FileHandler       // file handler for accessing files
+	cipher   ciphering.Handler // Cipher handler for encryption and decryption (optional)
 }
 
 // New creates a new JConfig instance with the provided file path and default values.
@@ -30,15 +30,23 @@ type JConfig struct {
 func New(path string, defaults dictx.Dict) (*JConfig, error) {
 	path = filepath.Clean(path)
 	if path == "" {
-		return nil, errors.New("config file path cannot be empty")
+		return nil, errors.New("file path cannot be empty")
 	}
 	if defaults == nil {
 		defaults = dictx.Dict{}
 	}
 	return &JConfig{
-		Buffer:  defaults,
-		cfgPath: path,
+		Buffer:   defaults,
+		cfgPath:  path,
+		fhandler: NewStdFileHandler(),
 	}, nil
+}
+
+// SetFileHandler sets a new file handler.
+func (c *JConfig) SetFileHandler(handler FileHandler) {
+	if handler != nil {
+		c.fhandler = handler
+	}
 }
 
 // InitBackup sets the backup file path for the configuration.
@@ -46,7 +54,7 @@ func New(path string, defaults dictx.Dict) (*JConfig, error) {
 func (c *JConfig) InitBackup(path string) error {
 	path = filepath.Clean(path)
 	if path == "" {
-		return errors.New("config backup path cannot be empty")
+		return errors.New("file path cannot be empty")
 	}
 	c.bakPath = path
 	return nil
@@ -60,15 +68,13 @@ func (c *JConfig) EnableBackup() {
 
 // IsExist checks whether the main configuration file exists.
 func (c *JConfig) IsExist() bool {
-	_, err := os.Stat(c.cfgPath)
-	return !os.IsNotExist(err)
+	return c.fhandler.IsExist(c.cfgPath)
 }
 
 // IsBackupExist checks whether the backup file exists.
 func (c *JConfig) IsBackupExist() bool {
 	if c.bakPath != "" {
-		_, err := os.Stat(c.bakPath)
-		return !os.IsNotExist(err)
+		return c.fhandler.IsExist(c.bakPath)
 	}
 	return false
 }
@@ -98,11 +104,11 @@ func (c *JConfig) Load() error {
 
 	// Attempt to load the primary configuration file
 	if c.IsExist() {
-		b, err = os.ReadFile(c.cfgPath)
+		b, err = c.fhandler.Read(c.cfgPath)
 		if err == nil {
 			if err = c.load(b); err == nil {
 				if c.bakPath != "" {
-					os.WriteFile(c.bakPath, b, 0o664)
+					c.fhandler.Write(c.bakPath, b, 0o664)
 				}
 				return nil
 			}
@@ -111,10 +117,10 @@ func (c *JConfig) Load() error {
 
 	// Attempt to load the backup file if the primary failed
 	if c.IsBackupExist() {
-		b, err = os.ReadFile(c.bakPath)
+		b, err = c.fhandler.Read(c.bakPath)
 		if err == nil {
 			if err = c.load(b); err == nil {
-				return os.WriteFile(c.cfgPath, b, 0o664)
+				return c.fhandler.Write(c.cfgPath, b, 0o664)
 			}
 		}
 	}
@@ -131,11 +137,11 @@ func (c *JConfig) Save() error {
 		return err
 	}
 	b = append(b, '\n')
-	if err = os.WriteFile(c.cfgPath, b, 0o664); err != nil {
+	if err = c.fhandler.Write(c.cfgPath, b, 0o664); err != nil {
 		return err
 	}
 	if c.bakPath != "" {
-		return os.WriteFile(c.bakPath, b, 0o664)
+		return c.fhandler.Write(c.bakPath, b, 0o664)
 	}
 	return nil
 }
@@ -174,15 +180,24 @@ func (c *JConfig) Delete(key string) {
 func (c *JConfig) Purge() error {
 	c.Buffer = dictx.Dict{}
 	if c.IsBackupExist() {
-		os.Remove(c.bakPath)
+		c.fhandler.Remove(c.bakPath)
 	}
 	if c.IsExist() {
-		return os.Remove(c.cfgPath)
+		return c.fhandler.Remove(c.cfgPath)
 	}
 	return nil
 }
 
 ///////////////////////////////////////////////////////
+
+// InitCipher initializes ciphering handler
+func (c *JConfig) InitCipher(cipher ciphering.Handler) error {
+	if cipher != nil {
+		c.cipher = cipher
+		return nil
+	}
+	return errors.New("empty cipher handler")
+}
 
 // InitAES128 initializes AES-128 encryption for the configuration
 // using the provided secret key.
