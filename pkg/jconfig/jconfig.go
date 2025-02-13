@@ -22,6 +22,7 @@ type JConfig struct {
 	Buffer  dictx.Dict        // Holds the current configuration in memory
 	cfgPath string            // Path to the main configuration file
 	bakPath string            // Path to the backup configuration file (optional)
+	fhnd    FileHandler       // file handler for accessing files
 	cipher  ciphering.Handler // Cipher handler for encryption and decryption (optional)
 }
 
@@ -38,7 +39,15 @@ func New(path string, defaults dictx.Dict) (*JConfig, error) {
 	return &JConfig{
 		Buffer:  defaults,
 		cfgPath: path,
+		fhnd:    NewStdFileHandler(),
 	}, nil
+}
+
+// SetFileHandler sets a new file handler.
+func (c *JConfig) SetFileHandler(handler FileHandler) {
+	if handler != nil {
+		c.fhnd = handler
+	}
 }
 
 // InitBackup sets the backup file path for the configuration.
@@ -98,11 +107,11 @@ func (c *JConfig) Load() error {
 
 	// Attempt to load the primary configuration file
 	if c.IsExist() {
-		b, err = os.ReadFile(c.cfgPath)
+		b, err = c.fhnd.Read(c.cfgPath)
 		if err == nil {
 			if err = c.load(b); err == nil {
 				if c.bakPath != "" {
-					os.WriteFile(c.bakPath, b, 0o664)
+					c.fhnd.Write(c.bakPath, b, 0o664)
 				}
 				return nil
 			}
@@ -111,10 +120,10 @@ func (c *JConfig) Load() error {
 
 	// Attempt to load the backup file if the primary failed
 	if c.IsBackupExist() {
-		b, err = os.ReadFile(c.bakPath)
+		b, err = c.fhnd.Read(c.bakPath)
 		if err == nil {
 			if err = c.load(b); err == nil {
-				return os.WriteFile(c.cfgPath, b, 0o664)
+				return c.fhnd.Write(c.cfgPath, b, 0o664)
 			}
 		}
 	}
@@ -131,11 +140,11 @@ func (c *JConfig) Save() error {
 		return err
 	}
 	b = append(b, '\n')
-	if err = os.WriteFile(c.cfgPath, b, 0o664); err != nil {
+	if err = c.fhnd.Write(c.cfgPath, b, 0o664); err != nil {
 		return err
 	}
 	if c.bakPath != "" {
-		return os.WriteFile(c.bakPath, b, 0o664)
+		return c.fhnd.Write(c.bakPath, b, 0o664)
 	}
 	return nil
 }
