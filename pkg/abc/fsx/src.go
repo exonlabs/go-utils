@@ -10,6 +10,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/cespare/xxhash/v2"
 )
 
 // ParsePath validates and returns the absolute path.
@@ -168,4 +170,44 @@ func Touch(path string) error {
 		f.Close()
 	}
 	return nil
+}
+
+// hashFile computes the xxHash64 of a given file.
+func hashFile(path string) (uint64, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return 0, err
+	}
+	defer f.Close()
+
+	hasher := xxhash.New()
+	if _, err := io.Copy(hasher, f); err != nil {
+		return 0, err
+	}
+
+	return hasher.Sum64(), nil
+}
+
+// FilesEqual checks if files are equal using the extremely fast
+// non-cryptographic xxhash algorithm.
+func FilesEqual(paths ...string) (bool, error) {
+	if len(paths) < 2 {
+		return false, errors.New("require at least 2 file paths")
+	}
+
+	var check_hash uint64
+	for i, path := range paths {
+		if !IsExist(path) {
+			return false, errors.New("path not exist")
+		}
+		if hash, err := hashFile(path); err != nil {
+			return false, err
+		} else if i == 0 { // first file
+			check_hash = hash
+		} else if hash != check_hash {
+			return false, nil
+		}
+	}
+
+	return true, nil
 }

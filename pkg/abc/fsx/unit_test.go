@@ -5,6 +5,7 @@
 package fsx_test
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -148,4 +149,41 @@ func TestTouch(t *testing.T) {
 		"should not return error on touching source file")
 	assert.True(t, fsx.IsExist(srcFile),
 		"source file should exist after touch")
+}
+
+func TestFilesEqual(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	_, err := fsx.FilesEqual()
+	assert.Error(t, err, "should return error with no files to compare")
+	_, err = fsx.FilesEqual("", "")
+	assert.Error(t, err, "should return error with empty files paths")
+
+	testContent := []byte("test content")
+	files := []string{}
+	for i := 0; i < 5; i++ {
+		fpath := filepath.Join(tmpDir, fmt.Sprintf("file%d.txt", i))
+		err := os.WriteFile(fpath, testContent, 0o664)
+		assert.NoError(t, err,
+			"should not return error on writing to file")
+		files = append(files, fpath)
+	}
+
+	result, err := fsx.FilesEqual(files...)
+	assert.NoError(t, err,
+		"should not return error during files compare")
+	assert.Equal(t, result, true, "files compare should match")
+
+	// testing non-matching files
+	diffContent := []byte("different test content")
+	fpath := filepath.Join(tmpDir, "filex.txt")
+	err = os.WriteFile(fpath, diffContent, 0o664)
+	assert.NoError(t, err,
+		"should not return error on writing to file")
+	files = append(files, fpath)
+
+	result, err = fsx.FilesEqual(files...)
+	assert.NoError(t, err,
+		"should not return error during files compare")
+	assert.Equal(t, result, false, "files compare should not match")
 }
