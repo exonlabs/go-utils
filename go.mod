@@ -8,6 +8,7 @@ go 1.20
 retract [v0.0.0, v0.2.9]
 
 require (
+	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/fatih/color v1.18.0
 	github.com/stretchr/testify v1.8.4
 	go.bug.st/serial v1.6.2
