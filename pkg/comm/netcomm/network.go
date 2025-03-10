@@ -107,8 +107,8 @@ type Connection struct {
 	// wgClose defines wait group for close operations.
 	wgClose sync.WaitGroup
 
-	// CommLog is the logger instance for communication data logging.
-	CommLog *logging.Logger
+	// Log is the logger instance for communication data logging.
+	Log *logging.Logger
 
 	// PollConfig defines the read polling.
 	PollConfig *comm.PollingConfig
@@ -124,7 +124,7 @@ type Connection struct {
 //   - Polling Options: detailed in [comm.ParsePollingConfig]
 //   - Keepalive Options: detailed in [comm.ParseKeepaliveConfig]
 //   - TLS Options: detailed in [comm.ParseTlsConfig]
-func NewConnection(uri string, commlog *logging.Logger, opts dictx.Dict) (*Connection, error) {
+func NewConnection(uri string, log *logging.Logger, opts dictx.Dict) (*Connection, error) {
 	uri = strings.TrimSpace(uri)
 	network, address, err := ParseUri(uri)
 	if err != nil {
@@ -135,7 +135,7 @@ func NewConnection(uri string, commlog *logging.Logger, opts dictx.Dict) (*Conne
 		uri:     uri,
 		network: network,
 		address: address,
-		CommLog: commlog,
+		Log:     log,
 	}
 
 	// set polling options
@@ -220,15 +220,15 @@ func (c *Connection) Open(timeout float64) error {
 
 	conn, err := dialer.Dial(c.network, c.address)
 	if err != nil {
-		comm.LogMsg(c.CommLog, "CONNECT_FAIL -- %v", err)
+		comm.LogMsg(c.Log, "CONNECT_FAIL -- %v", err)
 		return fmt.Errorf("%w, %v", comm.ErrConnection, err)
 	}
 	// set tls config for connection
 	if c.TlsConfig != nil {
 		conn = tls.Client(conn, c.TlsConfig)
-		comm.LogMsg(c.CommLog, "CONNECTED TLS -- %s", c.uri)
+		comm.LogMsg(c.Log, "CONNECTED TLS -- %s", c.uri)
 	} else {
-		comm.LogMsg(c.CommLog, "CONNECTED -- %s", c.uri)
+		comm.LogMsg(c.Log, "CONNECTED -- %s", c.uri)
 	}
 	c.netConn = conn
 
@@ -262,7 +262,7 @@ func (c *Connection) Close() {
 	}
 
 	c.wgClose.Wait()
-	comm.LogMsg(c.CommLog, "DISCONNECTED -- %s", c.uri)
+	comm.LogMsg(c.Log, "DISCONNECTED -- %s", c.uri)
 	c.isOpened.Store(false)
 }
 
@@ -312,7 +312,7 @@ func (c *Connection) SendTo(data []byte, addr any, timeout float64) error {
 
 	if conn, ok := c.netConn.(net.PacketConn); ok && c.parent != nil {
 		if a, ok := addr.(net.Addr); ok {
-			comm.LogTx(c.CommLog, data, a)
+			comm.LogTx(c.Log, data, a)
 			if timeout > 0 {
 				conn.SetWriteDeadline(time.Now().Add(
 					time.Duration(timeout * float64(time.Second))))
@@ -326,7 +326,7 @@ func (c *Connection) SendTo(data []byte, addr any, timeout float64) error {
 			}
 		}
 	} else if conn, ok := c.netConn.(net.Conn); ok {
-		comm.LogTx(c.CommLog, data, nil)
+		comm.LogTx(c.Log, data, nil)
 		if timeout > 0 {
 			conn.SetWriteDeadline(time.Now().Add(
 				time.Duration(timeout * float64(time.Second))))
@@ -342,11 +342,11 @@ func (c *Connection) SendTo(data []byte, addr any, timeout float64) error {
 	if err != nil {
 		if comm.IsClosedError(err) || comm.IsTLSError(err) {
 			c.closeEvent.Store(true)
-			comm.LogMsg(c.CommLog, "CONN_CLOSED -- %v", err)
+			comm.LogMsg(c.Log, "CONN_CLOSED -- %v", err)
 			go c.Close()
 			return comm.ErrClosed
 		}
-		comm.LogMsg(c.CommLog, "SEND_ERROR -- %v", err)
+		comm.LogMsg(c.Log, "SEND_ERROR -- %v", err)
 		return fmt.Errorf("%w, %v", comm.ErrSend, err)
 	}
 
@@ -425,12 +425,12 @@ func (c *Connection) RecvFrom(timeout float64) ([]byte, any, error) {
 		if err != nil {
 			if comm.IsClosedError(err) || comm.IsTLSError(err) {
 				c.closeEvent.Store(true)
-				comm.LogMsg(c.CommLog, "CONN_CLOSED -- %v", err)
+				comm.LogMsg(c.Log, "CONN_CLOSED -- %v", err)
 				go c.Close()
 				return nil, nil, comm.ErrClosed
 			}
 			if _, ok := err.(net.Error); !ok || !err.(net.Error).Timeout() {
-				comm.LogMsg(c.CommLog, "RECV_ERROR -- %v", err)
+				comm.LogMsg(c.Log, "RECV_ERROR -- %v", err)
 				return nil, nil, fmt.Errorf("%w, %v", comm.ErrRecv, err)
 			}
 		}
@@ -463,7 +463,7 @@ func (c *Connection) RecvFrom(timeout float64) ([]byte, any, error) {
 		}
 	}
 
-	comm.LogRx(c.CommLog, data, addr)
+	comm.LogRx(c.Log, data, addr)
 	return data, addr, nil
 }
 
@@ -492,8 +492,8 @@ type Listener struct {
 	// muState defines mutex for state change operations (start/stop).
 	muState sync.Mutex
 
-	// CommLog is the logger instance for communication data logging.
-	CommLog *logging.Logger
+	// Log is the logger instance for communication data logging.
+	Log *logging.Logger
 
 	// PollConfig defines the read polling.
 	PollConfig *comm.PollingConfig
@@ -512,7 +512,7 @@ type Listener struct {
 //   - Limiter Options: detailed in [comm.ParseLimiterConfig]
 //   - Keepalive Options: detailed in [comm.ParseKeepaliveConfig]
 //   - TLS Options: detailed in [comm.ParseTlsConfig]
-func NewListener(uri string, commlog *logging.Logger, opts dictx.Dict) (*Listener, error) {
+func NewListener(uri string, log *logging.Logger, opts dictx.Dict) (*Listener, error) {
 	uri = strings.TrimSpace(uri)
 	network, address, err := ParseUri(uri)
 	if err != nil {
@@ -523,7 +523,7 @@ func NewListener(uri string, commlog *logging.Logger, opts dictx.Dict) (*Listene
 		uri:     uri,
 		network: network,
 		address: address,
-		CommLog: commlog,
+		Log:     log,
 	}
 
 	// set polling options
@@ -609,9 +609,9 @@ func (l *Listener) startListener() error {
 	// set tls config for listener
 	if l.TlsConfig != nil {
 		netListener = tls.NewListener(netListener, l.TlsConfig)
-		comm.LogMsg(l.CommLog, "LISTENING TLS -- %s", l.uri)
+		comm.LogMsg(l.Log, "LISTENING TLS -- %s", l.uri)
 	} else {
-		comm.LogMsg(l.CommLog, "LISTENING -- %s", l.uri)
+		comm.LogMsg(l.Log, "LISTENING -- %s", l.uri)
 	}
 	l.netListener = netListener
 
@@ -624,7 +624,7 @@ func (l *Listener) startListener() error {
 		netListener.Close()
 		// wait all connections handlers termination
 		wg.Wait()
-		comm.LogMsg(l.CommLog, "CLOSED -- %s", l.uri)
+		comm.LogMsg(l.Log, "CLOSED -- %s", l.uri)
 		l.isActive.Store(false)
 	}()
 
@@ -635,7 +635,7 @@ func (l *Listener) startListener() error {
 			if comm.IsClosedError(err) {
 				break
 			} else {
-				comm.LogMsg(l.CommLog, "CONN_ERROR -- %v", err)
+				comm.LogMsg(l.Log, "CONN_ERROR -- %v", err)
 				continue
 			}
 		}
@@ -653,16 +653,16 @@ func (l *Listener) startListener() error {
 				PollConfig:      l.PollConfig,
 				KeepaliveConfig: l.KeepaliveConfig,
 			}
-			if l.CommLog != nil {
-				c.CommLog = l.CommLog.SubLogger(uri)
+			if l.Log != nil {
+				c.Log = l.Log.SubLogger(uri)
 			}
 			c.parent = l
 			c.isOpened.Store(true)
-			comm.LogMsg(c.CommLog, "CONNECTED")
+			comm.LogMsg(c.Log, "CONNECTED")
 
 			defer func() {
 				conn.Close()
-				comm.LogMsg(c.CommLog, "DISCONNECTED")
+				comm.LogMsg(c.Log, "DISCONNECTED")
 				wg.Done()
 			}()
 
@@ -686,7 +686,7 @@ func (l *Listener) startPacketConn() error {
 	}
 	l.netListener = packetConn
 
-	comm.LogMsg(l.CommLog, "LISTENING -- %s", l.uri)
+	comm.LogMsg(l.Log, "LISTENING -- %s", l.uri)
 
 	c := &Connection{
 		uri:        l.uri,

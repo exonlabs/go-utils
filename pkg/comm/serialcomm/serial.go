@@ -118,8 +118,8 @@ type Connection struct {
 	// wgClose defines wait group for close operations.
 	wgClose sync.WaitGroup
 
-	// CommLog is the logger instance for communication data logging.
-	CommLog *logging.Logger
+	// Log is the logger instance for communication data logging.
+	Log *logging.Logger
 
 	// PollConfig defines the read polling.
 	PollConfig *comm.PollingConfig
@@ -129,7 +129,7 @@ type Connection struct {
 //
 // The parsed options are:
 //   - Polling Options: detailed in [comm.ParsePollingConfig]
-func NewConnection(uri string, commlog *logging.Logger, opts dictx.Dict) (*Connection, error) {
+func NewConnection(uri string, log *logging.Logger, opts dictx.Dict) (*Connection, error) {
 	uri = strings.TrimSpace(uri)
 	port, mode, err := ParseUri(uri)
 	if err != nil {
@@ -137,10 +137,10 @@ func NewConnection(uri string, commlog *logging.Logger, opts dictx.Dict) (*Conne
 	}
 
 	c := &Connection{
-		uri:     uri,
-		port:    port,
-		mode:    mode,
-		CommLog: commlog,
+		uri:  uri,
+		port: port,
+		mode: mode,
+		Log:  log,
 	}
 
 	// set polling options
@@ -204,10 +204,10 @@ func (c *Connection) Open(timeout float64) error {
 
 	com, err := serial.Open(c.port, c.mode)
 	if err != nil {
-		comm.LogMsg(c.CommLog, "OPEN_FAIL -- %v", err)
+		comm.LogMsg(c.Log, "OPEN_FAIL -- %v", err)
 		return fmt.Errorf("%w, %v", comm.ErrConnection, err)
 	}
-	comm.LogMsg(c.CommLog, "OPENED -- %s", c.uri)
+	comm.LogMsg(c.Log, "OPENED -- %s", c.uri)
 	c.serialPort = com
 	c.serialPort.ResetInputBuffer()
 	c.serialPort.ResetOutputBuffer()
@@ -240,7 +240,7 @@ func (c *Connection) Close() {
 	c.serialPort.ResetOutputBuffer()
 
 	c.wgClose.Wait()
-	comm.LogMsg(c.CommLog, "CLOSED -- %s", c.uri)
+	comm.LogMsg(c.Log, "CLOSED -- %s", c.uri)
 	c.isOpened.Store(false)
 }
 
@@ -266,7 +266,7 @@ func (c *Connection) SetMode(mode string) error {
 
 	// apply new mode if port is already opened
 	if c.isOpened.Load() {
-		comm.LogMsg(c.CommLog, "SETMODE -- %s", newUri)
+		comm.LogMsg(c.Log, "SETMODE -- %s", newUri)
 		if err := c.serialPort.SetMode(newMode); err != nil {
 			return fmt.Errorf("%w, %v", comm.ErrConnection, err)
 		}
@@ -318,7 +318,7 @@ func (c *Connection) SendTo(data []byte, _ any, timeout float64) error {
 	c.wgClose.Add(1)
 	defer c.wgClose.Done()
 
-	comm.LogTx(c.CommLog, data, nil)
+	comm.LogTx(c.Log, data, nil)
 	n, err := c.serialPort.Write(data)
 	if err == nil {
 		// Ensure all data is flushed from the OS buffer
@@ -331,11 +331,11 @@ func (c *Connection) SendTo(data []byte, _ any, timeout float64) error {
 	if err != nil {
 		if comm.IsClosedError(err) {
 			c.closeEvent.Store(true)
-			comm.LogMsg(c.CommLog, "PORT_CLOSED -- %v", err)
+			comm.LogMsg(c.Log, "PORT_CLOSED -- %v", err)
 			go c.Close()
 			return comm.ErrClosed
 		}
-		comm.LogMsg(c.CommLog, "SEND_ERROR -- %v", err)
+		comm.LogMsg(c.Log, "SEND_ERROR -- %v", err)
 		c.serialPort.ResetOutputBuffer()
 		return fmt.Errorf("%w, %v", comm.ErrSend, err)
 	}
@@ -396,11 +396,11 @@ func (c *Connection) RecvFrom(timeout float64) ([]byte, any, error) {
 		if err != nil {
 			if comm.IsClosedError(err) {
 				c.closeEvent.Store(true)
-				comm.LogMsg(c.CommLog, "PORT_CLOSED -- %v", err)
+				comm.LogMsg(c.Log, "PORT_CLOSED -- %v", err)
 				go c.Close()
 				return nil, nil, comm.ErrClosed
 			}
-			comm.LogMsg(c.CommLog, "RECV_ERROR -- %v", err)
+			comm.LogMsg(c.Log, "RECV_ERROR -- %v", err)
 			return nil, nil, fmt.Errorf("%w, %v", comm.ErrRecv, err)
 		}
 
@@ -426,7 +426,7 @@ func (c *Connection) RecvFrom(timeout float64) ([]byte, any, error) {
 		}
 	}
 
-	comm.LogRx(c.CommLog, data, nil)
+	comm.LogRx(c.Log, data, nil)
 	return data, nil, nil
 }
 
@@ -446,8 +446,8 @@ type Listener struct {
 	// muState defines mutex for state change operations (start/stop).
 	muState sync.Mutex
 
-	// CommLog is the logger instance for communication data logging.
-	CommLog *logging.Logger
+	// Log is the logger instance for communication data logging.
+	Log *logging.Logger
 
 	// PollConfig defines the read polling.
 	PollConfig *comm.PollingConfig
@@ -457,15 +457,15 @@ type Listener struct {
 //
 // The parsed options are:
 //   - Polling Options: detailed in [comm.ParsePollingConfig]
-func NewListener(uri string, commlog *logging.Logger, opts dictx.Dict) (*Listener, error) {
-	conn, err := NewConnection(uri, commlog, opts)
+func NewListener(uri string, log *logging.Logger, opts dictx.Dict) (*Listener, error) {
+	conn, err := NewConnection(uri, log, opts)
 	if err != nil {
 		return nil, err
 	}
 
 	return &Listener{
 		serialConn: conn,
-		CommLog:    commlog,
+		Log:        log,
 		PollConfig: conn.PollConfig,
 	}, nil
 }
