@@ -10,9 +10,9 @@ retract [v0.0.0, v0.2.9]
 require (
 	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/fatih/color v1.18.0
-	github.com/stretchr/testify v1.8.4
-	go.bug.st/serial v1.6.2
-	golang.org/x/net v0.34.0
+	github.com/stretchr/testify v1.10.0
+	go.bug.st/serial v1.6.3
+	golang.org/x/net v0.36.0
 	golang.org/x/sys v0.30.0
 	golang.org/x/term v0.29.0
 )
