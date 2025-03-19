@@ -6,6 +6,7 @@ package dictx
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 )
 
@@ -37,12 +38,17 @@ func Clone(d Dict) (Dict, error) {
 // String returns string representation of keys and values.
 func String(d Dict) string {
 	s := ""
-	for k, v := range d {
+	keys := []string{}
+	for k := range d {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
 		if len(k) > 0 {
-			if nestedDict, ok := v.(Dict); ok {
+			if nestedDict, ok := d[k].(Dict); ok {
 				s += fmt.Sprintf("%s: %s, ", k, String(nestedDict))
 			} else {
-				s += fmt.Sprintf("%s: %v, ", k, v)
+				s += fmt.Sprintf("%s: %v, ", k, d[k])
 			}
 		}
 	}
@@ -57,11 +63,16 @@ func String(d Dict) string {
 // If n is greater than 1, it retrieves nested keys accordingly.
 // Zero-length keys are omitted from the results.
 func KeysN(d Dict, n int) []string {
-	keys := make([]string, 0, len(d))
-	for k, v := range d {
+	keys := []string{}
+	loop_keys := []string{}
+	for k := range d {
+		loop_keys = append(loop_keys, k)
+	}
+	sort.Strings(loop_keys)
+	for _, k := range loop_keys {
 		if len(k) > 0 {
 			if n != 1 {
-				if nestedDict, ok := v.(Dict); ok {
+				if nestedDict, ok := d[k].(Dict); ok {
 					for _, sk := range KeysN(nestedDict, n-1) {
 						keys = append(keys, k+Separator+sk)
 					}

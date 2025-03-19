@@ -53,7 +53,13 @@ func TestString(t *testing.T) {
 func TestKeysN(t *testing.T) {
 	d := Dict{
 		"a": Dict{
-			"b": Dict{
+			"b1": Dict{
+				"c": Dict{
+					"d1": "value",
+					"d2": "value",
+				},
+			},
+			"b2": Dict{
 				"c": Dict{
 					"d": "value",
 				},
@@ -61,21 +67,21 @@ func TestKeysN(t *testing.T) {
 		},
 	}
 	keys := KeysN(d, -1)
-	expected := []string{"a.b.c.d"}
-	assert.ElementsMatch(t, expected, keys)
+	expected := []string{"a.b1.c.d1", "a.b1.c.d2", "a.b2.c.d"}
+	assert.Equal(t, expected, keys)
 
 	// Test for limited depth
 	keysLevel1 := KeysN(d, 1)
 	expectedLevel1 := []string{"a"}
-	assert.ElementsMatch(t, expectedLevel1, keysLevel1)
+	assert.Equal(t, expectedLevel1, keysLevel1)
 
 	keysLevel2 := KeysN(d, 2)
-	expectedLevel2 := []string{"a.b"}
-	assert.ElementsMatch(t, expectedLevel2, keysLevel2)
+	expectedLevel2 := []string{"a.b1", "a.b2"}
+	assert.Equal(t, expectedLevel2, keysLevel2)
 
 	keysLevel3 := KeysN(d, 3)
-	expectedLevel3 := []string{"a.b.c"}
-	assert.ElementsMatch(t, expectedLevel3, keysLevel3)
+	expectedLevel3 := []string{"a.b1.c", "a.b2.c"}
+	assert.Equal(t, expectedLevel3, keysLevel3)
 }
 
 func TestIsExist(t *testing.T) {
