@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/exonlabs/go-utils/pkg/abc/fsx"
 )
@@ -186,4 +187,128 @@ func TestFilesEqual(t *testing.T) {
 	assert.NoError(t, err,
 		"should not return error during files compare")
 	assert.Equal(t, result, false, "files compare should not match")
+}
+
+func TestLockAndUnlock(t *testing.T) {
+	// Create a temp file
+	file1, err := os.CreateTemp("", "locktest")
+	require.NoError(t, err)
+	defer os.Remove(file1.Name())
+	defer file1.Close()
+
+	// First lock attempt (file1)
+	locked, err := fsx.Lock(file1)
+	require.NoError(t, err)
+	require.True(t, locked, "First lock should succeed")
+
+	// Open the same file with a different descriptor (file2)
+	file2, err := os.OpenFile(file1.Name(), os.O_RDWR, 0o777)
+	require.NoError(t, err)
+	defer file2.Close()
+
+	// Try locking again with a different file descriptor (should fail)
+	locked, err = fsx.Lock(file2)
+	require.NoError(t, err)
+	require.False(t, locked, "Second lock should fail")
+
+	// Unlock using first descriptor
+	err = fsx.UnLock(file1)
+	require.NoError(t, err)
+
+	// Try locking again with the second descriptor (should now succeed)
+	locked, err = fsx.Lock(file2)
+	require.NoError(t, err)
+	require.True(t, locked, "Locking after unlock should succeed")
+}
+
+func TestLockWaitTimeout(t *testing.T) {
+	// Create a temp file
+	file1, err := os.CreateTemp("", "locktest")
+	require.NoError(t, err)
+	defer os.Remove(file1.Name())
+	defer file1.Close()
+
+	// First lock attempt (file1)
+	locked, err := fsx.Lock(file1)
+	require.NoError(t, err)
+	require.True(t, locked, "First lock should succeed")
+
+	// Open the same file with a different descriptor (file2)
+	file2, err := os.OpenFile(file1.Name(), os.O_RDWR, 0o777)
+	require.NoError(t, err)
+	defer file2.Close()
+
+	// Try locking again with a different file descriptor (should fail)
+	err = fsx.LockWait(file2, 0.01)
+	require.Error(t, err, "Second lock should fail")
+
+	// Unlock using first descriptor
+	err = fsx.UnLock(file1)
+	require.NoError(t, err)
+
+	// Try locking again with the second descriptor (should now succeed)
+	err = fsx.LockWait(file2, 0.01)
+	require.NoError(t, err, "Second lock should succeed")
+}
+
+func TestRLockAndUnlock(t *testing.T) {
+	// Create a temp file
+	file1, err := os.CreateTemp("", "rlocktest")
+	require.NoError(t, err)
+	defer os.Remove(file1.Name())
+	defer file1.Close()
+
+	// First lock attempt (file1)
+	locked, err := fsx.RLock(file1)
+	require.NoError(t, err)
+	require.True(t, locked, "First lock should succeed")
+
+	// Open the same file with a different descriptor (file2)
+	file2, err := os.OpenFile(file1.Name(), os.O_RDWR, 0o777)
+	require.NoError(t, err)
+	defer file2.Close()
+
+	// Try locking again with a different file descriptor (should fail)
+	locked, err = fsx.RLock(file2)
+	require.NoError(t, err)
+	require.True(t, locked, "Second lock should succeed")
+
+	// Unlock using first descriptor
+	err = fsx.UnLock(file1)
+	require.NoError(t, err)
+
+	// Try locking again with the second descriptor (should now succeed)
+	locked, err = fsx.RLock(file2)
+	require.NoError(t, err)
+	require.True(t, locked, "Locking after unlock should succeed")
+}
+
+func TestRLockWaitTimeout(t *testing.T) {
+	// Create a temp file
+	file1, err := os.CreateTemp("", "locktest")
+	require.NoError(t, err)
+	defer os.Remove(file1.Name())
+	defer file1.Close()
+
+	// First lock attempt (file1)
+	locked, err := fsx.RLock(file1)
+	require.NoError(t, err)
+	require.True(t, locked, "First lock should succeed")
+
+	// Open the same file with a different descriptor (file2)
+	file2, err := os.OpenFile(file1.Name(), os.O_RDWR, 0o777)
+	require.NoError(t, err)
+	defer file2.Close()
+
+	// Try locking again with a different file descriptor (should fail)
+	err = fsx.RLockWait(file2, 0.01)
+	require.NoError(t, err, "Second lock should succeed")
+
+	// Unlock using first descriptor
+	err = fsx.UnLock(file1)
+	require.NoError(t, err)
+
+	// Try locking again with the second descriptor (should now succeed)
+	err = fsx.RLockWait(file2, 0.01)
+	require.NoError(t, err, "Second lock should succeed")
 }

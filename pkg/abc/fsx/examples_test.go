@@ -29,7 +29,8 @@ func ExampleParsePath() {
 			fmt.Printf("\"%s\" --> err: %s\n", path, err.Error())
 		}
 	}
-	// Output:
+
+	// Results:
 	// "" --> err: invalid path
 	// " " --> err: invalid path
 	// "/" --> "/"
