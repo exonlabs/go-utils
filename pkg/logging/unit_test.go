@@ -89,6 +89,7 @@ func TestFileLogger(t *testing.T) {
 func TestChildAndSubLoggers(t *testing.T) {
 	parentLogger := logging.NewStdoutLogger("Parent")
 	parentLogger.Level = logging.DEBUG
+	parentLogger.ClearHandlers()
 
 	assert.Equal(t, parentLogger.Name(), "Parent")
 
