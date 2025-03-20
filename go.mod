@@ -1,20 +1,19 @@
 module github.com/exonlabs/go-utils
 
-// version = "0.4.3.dev"
+// version = "0.10.0.dev"
 
-go 1.20
+go 1.23.0
 
-// ignore old dev versions
-retract [v0.0.0, v0.2.9]
+toolchain go1.24.1
 
 require (
 	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/fatih/color v1.18.0
 	github.com/stretchr/testify v1.10.0
 	go.bug.st/serial v1.6.3
-	golang.org/x/net v0.36.0
-	golang.org/x/sys v0.30.0
-	golang.org/x/term v0.29.0
+	golang.org/x/net v0.37.0
+	golang.org/x/sys v0.31.0
+	golang.org/x/term v0.30.0
 )
 
 require (
@@ -26,3 +25,5 @@ require (
 	github.com/stretchr/objx v0.5.2 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
+
+retract [v0.0.0, v0.4.99] // drop old dev versions before v0.5.0
