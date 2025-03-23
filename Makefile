@@ -20,6 +20,5 @@ build-tests:
 .PHONY: build-tests
 
 build-examples:
-	@for d in $$(ls examples) ;do [ -x examples/$$d/build.sh ] && \
-		bash examples/$$d/build.sh ;done ;true
+	@bash scripts/build_examples.sh
 .PHONY: build-examples
