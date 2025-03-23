@@ -26,4 +26,7 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-retract [v0.0.0, v0.4.99] // drop old dev versions before v0.5.0
+retract (
+	v0.5.0 // dependencies not compiling for go1.20
+	[v0.0.0, v0.4.99] // drop old dev versions before v0.5.0
+)
