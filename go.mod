@@ -9,7 +9,7 @@ require (
 	github.com/fatih/color v1.18.0
 	github.com/stretchr/testify v1.10.0
 	go.bug.st/serial v1.6.3
-	golang.org/x/net v0.36.0
+	golang.org/x/net v0.35.0
 	golang.org/x/sys v0.30.0
 	golang.org/x/term v0.29.0
 )
@@ -25,3 +25,5 @@ require (
 )
 
 retract [v0.0.0, v0.4.99] // drop old dev versions before v0.5.0
+
+retract v0.5.0 // dependencies not compiling for go1.20
