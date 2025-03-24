@@ -1,6 +1,6 @@
 module github.com/exonlabs/go-utils
 
-// version = "0.10.1.dev"
+// version = "0.10.1"
 
 go 1.23.0
 
