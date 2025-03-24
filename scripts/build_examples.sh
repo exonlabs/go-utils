@@ -2,7 +2,7 @@
 cd $(dirname $(readlink -f $0))/..
 
 GO=go
-ARGS=-trimpath -ldflags='-s -w -buildid='
+ARGS=(-trimpath -ldflags='-s -w')
 
 SRC_PATH=examples
 BUILD_PATH=build/examples
@@ -30,18 +30,18 @@ function build {
 
     out=${BUILD_LINUX_PATH}/${name}
     echo "  - ${out}"
-    ${GO} build -o ${out} ${ARGS} ${SRC_PATH}/${path}/*.go
+    ${GO} build -o ${out} "${ARGS[@]}" ${SRC_PATH}/${path}/*.go
 
     if [ -z "$3" ] ;then
         out=${BUILD_WIN_PATH}_64/${name}_64.exe
         echo "  - ${out}"
         GOOS=windows GOARCH=amd64 \
-            ${GO} build -o ${out} ${ARGS} ${SRC_PATH}/${path}/*.go
+            ${GO} build -o ${out} "${ARGS[@]}" ${SRC_PATH}/${path}/*.go
 
         out=${BUILD_WIN_PATH}_32/${name}_32.exe
         echo "  - ${out}"
         GOOS=windows GOARCH=386 \
-            ${GO} build -o ${out} ${ARGS} ${SRC_PATH}/${path}/*.go
+            ${GO} build -o ${out} "${ARGS[@]}" ${SRC_PATH}/${path}/*.go
     fi
 }
 
@@ -55,18 +55,18 @@ function build_cgo {
     out=${BUILD_LINUX_PATH}/${name}
     echo "  - ${out}"
     CGO_ENABLED=1 \
-        ${GO} build -o ${out} ${ARGS} ${SRC_PATH}/${path}/*.go
+        ${GO} build -o ${out} "${ARGS[@]}" ${SRC_PATH}/${path}/*.go
 
     if [ -z "$3" ] ;then
         out=${BUILD_WIN_PATH}_64/${name}_64.exe
         echo "  - ${out}"
         CC=x86_64-w64-mingw32-gcc CGO_ENABLED=1 GOOS=windows GOARCH=amd64 \
-            ${GO} build -o ${out} ${ARGS} ${SRC_PATH}/${path}/*.go
+            ${GO} build -o ${out} "${ARGS[@]}" ${SRC_PATH}/${path}/*.go
 
         out=${BUILD_WIN_PATH}_32/${name}_32.exe
         echo "  - ${out}"
         CC=i686-w64-mingw32-gcc CGO_ENABLED=1 GOOS=windows GOARCH=386 \
-            ${GO} build -o ${out} ${ARGS} ${SRC_PATH}/${path}/*.go
+            ${GO} build -o ${out} "${ARGS[@]}" ${SRC_PATH}/${path}/*.go
     fi
 }
 
