@@ -44,6 +44,31 @@ function build {
     fi
 }
 
+function build_cgo {
+    path=$1
+    name=$2
+    if [ -z "${name}" ] ;then
+        name=$(echo ${path} |tr '/' '_')
+    fi
+
+    out=${BUILD_LINUX_PATH}/${name}_test
+    echo "  - ${out}"
+    CGO_ENABLED=1 \
+        ${GO} test ${SRC_PATH}/${path} -c -o ${out}
+
+    if [ -z "$3" ] ;then
+        out=${BUILD_WIN_PATH}_64/${name}_test_64.exe
+        echo "  - ${out}"
+        CC=x86_64-w64-mingw32-gcc CGO_ENABLED=1 GOOS=windows GOARCH=amd64 \
+            ${GO} test ${SRC_PATH}/${path} -c -o ${out}
+
+        out=${BUILD_WIN_PATH}_32/${name}_test_32.exe
+        echo "  - ${out}"
+        CC=i686-w64-mingw32-gcc CGO_ENABLED=1 GOOS=windows GOARCH=386 \
+            ${GO} test ${SRC_PATH}/${path} -c -o ${out}
+    fi
+}
+
 # build tests
 
 build abc/gx
