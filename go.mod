@@ -11,7 +11,7 @@ require (
 	github.com/fatih/color v1.18.0
 	github.com/stretchr/testify v1.10.0
 	go.bug.st/serial v1.6.3
-	golang.org/x/net v0.37.0
+	golang.org/x/net v0.38.0
 	golang.org/x/sys v0.31.0
 	golang.org/x/term v0.30.0
 )
