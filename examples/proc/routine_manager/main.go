@@ -15,18 +15,17 @@ import (
 	"github.com/exonlabs/go-utils/pkg/proc"
 )
 
-var (
-	counter atomic.Int32
-)
+// global counter
+var counter atomic.Int32
 
 type Routine1 struct {
 	*proc.RoutineHandler
-	Parent *proc.RoutineManager
+	Manager *proc.RoutineManager
 }
 
-func NewRoutine1(log *logging.Logger, parent *proc.RoutineManager) *Routine1 {
+func NewRoutine1(log *logging.Logger, rm *proc.RoutineManager) *Routine1 {
 	rt := &Routine1{
-		Parent: parent,
+		Manager: rm,
 	}
 	rt.RoutineHandler = proc.NewRoutineHandler(log, rt)
 	return rt
@@ -45,11 +44,11 @@ func (rt *Routine1) Execute() error {
 
 	switch count {
 	case 5:
-		rt.Log.Info("stopping rt2 at count=%d", count)
-		rt.Parent.StopRoutine("rt2")
+		rt.Log.Info("stop rt2 at count=%d", count)
+		rt.Manager.StopRoutine("rt2")
 	case 10:
-		rt.Log.Info("starting rt2 at count=%d", count)
-		rt.Parent.StartRoutine("rt2")
+		rt.Log.Info("start rt2 at count=%d", count)
+		rt.Manager.StartRoutine("rt2")
 	}
 
 	rt.Sleep(1)
@@ -59,14 +58,11 @@ func (rt *Routine1) Execute() error {
 func (rt *Routine1) Terminate() error {
 	rt.Log.Info("terminating")
 
-	// terminate activity after 3sec
+	// terminate activity after few seconds
 	exitSec := 3
-	rt.Log.Info("exit after %d sec", exitSec)
-	for i := 0; i < exitSec; i++ {
-		if !rt.Sleep(1) {
-			break
-		}
-		rt.Log.Info("term ... %d", (i + 1))
+	for i := exitSec; i > 0; i-- {
+		rt.Log.Info("exit after %d sec", i)
+		rt.Manager.Sleep(1)
 	}
 
 	rt.Log.Info("terminated")
@@ -75,12 +71,12 @@ func (rt *Routine1) Terminate() error {
 
 type Routine2 struct {
 	*proc.RoutineHandler
-	Parent *proc.RoutineManager
+	Manager *proc.RoutineManager
 }
 
-func NewRoutine2(log *logging.Logger, parent *proc.RoutineManager) *Routine2 {
+func NewRoutine2(log *logging.Logger, rm *proc.RoutineManager) *Routine2 {
 	rt := &Routine2{
-		Parent: parent,
+		Manager: rm,
 	}
 	rt.RoutineHandler = proc.NewRoutineHandler(log, rt)
 	return rt
@@ -97,11 +93,11 @@ func (rt *Routine2) Execute() error {
 
 	switch count {
 	case 15:
-		rt.Log.Info("stopping myself at count=%d", count)
+		rt.Log.Info("reset myself at count=%d", count)
 		rt.Stop()
 	case 20:
 		rt.Log.Info("stopping process at count=%d", count)
-		rt.Parent.Stop()
+		rt.Manager.Stop()
 	}
 
 	rt.Sleep(0.5)
@@ -131,10 +127,10 @@ func main() {
 	flag.Parse()
 
 	switch {
-	case *debug0:
-		log.Level = logging.DEBUG
 	case *debug1:
 		log.Level = logging.TRACE
+	case *debug0:
+		log.Level = logging.DEBUG
 	}
 
 	log.Info("**** starting ****")
@@ -145,18 +141,27 @@ func main() {
 	rm.StoppingDelay = 5
 
 	rt1 := NewRoutine1(log.ChildLogger("rt1"), rm)
-	if err := rm.AddRoutine("rt1", rt1, true); err != nil {
+	rt1.Enable()
+	if err := rm.AddRoutine("rt1", rt1); err != nil {
 		log.Error(err.Error())
 		return
 	}
 
 	rt2 := NewRoutine2(log.ChildLogger("rt2"), rm)
-	if err := rm.AddRoutine("rt2", rt2, true); err != nil {
+	rt2.Enable()
+	if err := rm.AddRoutine("rt2", rt2); err != nil {
 		log.Error(err.Error())
 		return
 	}
 
-	rm.Start()
+	if err := rm.Start(); err != nil {
+		log.Error(err.Error())
+		return
+	}
 
-	log.Info("exit")
+	if !rm.WaitTerm(10) {
+		log.Warn("timeout waiting to stop ... exit anyway")
+	} else {
+		log.Info("exit")
+	}
 }

@@ -23,7 +23,10 @@ type SampleProcess struct {
 func NewSampleProcess(log *logging.Logger) *SampleProcess {
 	p := &SampleProcess{}
 	p.Process = proc.NewProcessHandler(log, p)
+
+	// set custom signal handler
 	p.Process.SetSignalHandler(syscall.SIGQUIT, p.handleSigQuit)
+
 	return p
 }
 
@@ -43,30 +46,28 @@ func (p *SampleProcess) Execute() error {
 		return nil
 	}
 
-	p.Sleep(1)
+	p.Sleep(0.2)
 	return nil
 }
 
 func (p *SampleProcess) Terminate() error {
 	p.Log.Info("terminating")
 
-	// terminate activity after 3sec
+	// terminate activity after few seconds
 	exitSec := 3
-	p.Log.Info("exit after %d sec", exitSec)
-	for i := 0; i < exitSec; i++ {
-		if !p.Sleep(1) {
-			break
-		}
-		p.Log.Info("term ... %d", (i + 1))
+	for i := exitSec; i > 0; i-- {
+		p.Log.Info("exit after %d sec", i)
+		p.Sleep(1)
 	}
 
 	p.Log.Info("terminated")
 	return nil
 }
 
-func (p *SampleProcess) handleSigQuit() {
-	p.Log.Info("exit overwrite .. no wait counts")
-	p.Kill()
+func (p *SampleProcess) handleSigQuit() error {
+	p.Log.Info("exit .. no wait counts")
+	os.Exit(0)
+	return nil
 }
 
 func main() {
@@ -76,8 +77,7 @@ func main() {
 		if r := recover(); r != nil {
 			stack := debug.Stack()
 			indx := bytes.Index(stack, []byte("panic({"))
-			log.Panic("%s", r)
-			log.Trace("\n----------\n%s----------", stack[indx:])
+			log.Panic("%v\n----------\n%s----------", r, stack[indx:])
 			os.Exit(1)
 		}
 	}()
@@ -96,7 +96,15 @@ func main() {
 	log.Info("**** starting ****")
 
 	p := NewSampleProcess(log)
-	p.Start()
 
-	log.Info("exit")
+	if err := p.Start(); err != nil {
+		log.Error(err.Error())
+		return
+	}
+
+	if !p.WaitTerm(10) {
+		log.Warn("timeout waiting to stop ... exit anyway")
+	} else {
+		log.Info("exit")
+	}
 }

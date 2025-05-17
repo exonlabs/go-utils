@@ -6,158 +6,109 @@ package proc
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"os/signal"
 	"runtime/debug"
-	"strings"
-	"sync"
 	"syscall"
 
-	"github.com/exonlabs/go-utils/pkg/comm"
 	"github.com/exonlabs/go-utils/pkg/logging"
 )
 
-// CommandHandler defines the function handling commands.
-type CommandHandler func(string) string
+type SignalHandler func() error
 
-// Process manages OS signal handling in addition to Tasklet management.
+// Process manages OS‑signal handling and delegates lifecycle control to an
+// embedded TaskletHandler.
 type Process struct {
 	*TaskletHandler
 
-	// command handling function and comm listener
-	cmdHandler  CommandHandler
-	cmdListener comm.Listener
-
 	// Map of signal handlers.
-	sigHandlers map[os.Signal]func()
+	sigHandlers map[os.Signal]SignalHandler
 }
 
-// NewProcessHandler creates a new ProcessHandler with signal handlers
-// for common signals like SIGINT and SIGTERM.
+// NewProcessHandler returns a Process that wraps the provided TaskletHandler
+// and installs default handlers for SIGINT, SIGTERM, SIGKILL, SIGQUIT and
+// SIGHUP.
 func NewProcessHandler(log *logging.Logger, tsk Tasklet) *Process {
-	h := &Process{
+	p := &Process{
 		TaskletHandler: NewTaskletHandler(log, tsk),
 	}
-	h.sigHandlers = map[os.Signal]func(){
-		syscall.SIGINT:  h.Stop, // Handle interruption signals (Ctrl+C).
-		syscall.SIGTERM: h.Stop, // Handle termination signals.
-		syscall.SIGKILL: h.Stop, // Handle kill signals.
-		syscall.SIGQUIT: h.Stop, // Handle quit signals.
-		syscall.SIGHUP:  h.Stop, // Handle hangup signals.
+	p.sigHandlers = map[os.Signal]SignalHandler{
+		syscall.SIGINT:  p.Stop, // Handle interruption signals (Ctrl+C).
+		syscall.SIGTERM: p.Stop, // Handle termination signals.
+		syscall.SIGKILL: p.Stop, // Handle kill signals.
+		syscall.SIGQUIT: p.Stop, // Handle quit signals.
+		syscall.SIGHUP:  p.Stop, // Handle hangup signals.
 	}
-	return h
+	return p
 }
 
-// SetCmdHandler sets the command handling function and comm listener to
-// enable command handling feature on process.
-func (h *Process) SetCmdHandler(l comm.Listener, f CommandHandler) {
-	if l != nil {
-		l.SetConnHandler(h.handleConnection)
-	}
-	h.cmdListener = l
-	h.cmdHandler = f
-}
-
-// SetSignalHandler allows the user to define custom handlers for specific signals.
-func (h *Process) SetSignalHandler(sig os.Signal, fn func()) {
+// SetSignalHandler registers a custom callback for the given signal,
+// overwriting any previously‑registered handler.
+func (p *Process) SetSignalHandler(sig os.Signal, fn SignalHandler) {
 	if sig != nil && fn != nil {
-		h.sigHandlers[sig] = fn
+		p.sigHandlers[sig] = fn
 	}
 }
 
 // handleSignal processes incoming signals and triggers the corresponding handler.
-func (h *Process) handleSignal(sig os.Signal) {
+func (p *Process) handleSignal(sig os.Signal) {
 	defer func() {
 		if r := recover(); r != nil {
 			stack := debug.Stack()
 			indx := bytes.Index(stack, []byte("panic({"))
-			h.Log.Error("%s", r)
-			h.Log.Trace("\n----------\n%s----------", stack[indx:])
+			if p.Log != nil {
+				p.Log.Panic("%v\n----------\n%s----------", r, stack[indx:])
+			} else {
+				fmt.Printf("%v\n----------\n%s----------\n", r, stack[indx:])
+			}
 		}
 	}()
 
-	// Log the received signal and execute the associated handler.
-	h.Log.Debug("<received signal: %v>", sig)
-	if handler, exists := h.sigHandlers[sig]; exists {
-		handler()
+	if p.Log != nil {
+		p.Log.Info("<received signal: %s>", sig)
 	} else {
-		h.Log.Warn("no handler registered for signal: %v", sig)
+		fmt.Printf("<received signal: %s>\n", sig)
+	}
+
+	if handler, exists := p.sigHandlers[sig]; exists {
+		if err := handler(); err != nil {
+			if p.Log != nil {
+				p.Log.Error(err.Error())
+			} else {
+				fmt.Println(err.Error())
+			}
+		}
+	} else if p.Log != nil {
+		p.Log.Trace("no handler registered for signal: %s", sig)
 	}
 }
 
-// handleConnection handles command connections
-func (h *Process) handleConnection(conn comm.Connection) {
-	defer func() {
-		if r := recover(); r != nil {
-			stack := debug.Stack()
-			indx := bytes.Index(stack, []byte("panic({"))
-			h.Log.Error("%s", r)
-			h.Log.Trace("\n----------\n%s----------", stack[indx:])
-		}
-	}()
-
-	for !h.termEvent.IsSet() && conn.IsOpened() {
-		b, addr, err := conn.RecvFrom(-1)
-		if err != nil {
-			if err == comm.ErrClosed {
-				return
-			}
-			h.Log.Error(err.Error())
-			continue
-		}
-		cmd := strings.TrimSpace(string(b))
-		if cmd == "" {
-			continue
-		}
-		reply := h.cmdHandler(cmd)
-		if reply != "" {
-			if err := conn.SendTo([]byte(reply+"\n"), addr, -1); err != nil {
-				h.Log.Error(err.Error())
-			}
-		}
-	}
-}
-
-// Start begins the process and sets up signal handling.
-func (h *Process) Start() {
-	// Create a buffered channel to receive multiple signals without blocking.
+// Start enables the underlying tasklet, launches its execution loop, and
+// begins listening for OS signals defined in sigHandlers.
+func (p *Process) Start() error {
+	// buffered channel to receive multiple signals without blocking.
 	sigCh := make(chan os.Signal, 2)
-	for sig := range h.sigHandlers {
-		// Register for signals defined in sigHandlers.
+	// Register signals defined in sigHandlers.
+	for sig := range p.sigHandlers {
 		signal.Notify(sigCh, sig)
 	}
 
 	// Start a goroutine to listen for OS signals and handle them.
 	go func() {
 		for sig := range sigCh {
-			h.handleSignal(sig)
+			go p.handleSignal(sig)
 		}
 	}()
 
-	var waitGrp sync.WaitGroup
-
-	if h.cmdListener != nil && h.cmdHandler != nil {
-		waitGrp.Add(1)
-		go func() {
-			defer waitGrp.Done()
-			if err := h.cmdListener.Start(); err != nil {
-				panic(err)
-			}
-		}()
-	}
-
 	// Start the tasklet lifecycle.
-	h.TaskletHandler.Enable()
-	h.TaskletHandler.Start()
-
-	waitGrp.Wait()
+	p.TaskletHandler.Enable()
+	return p.TaskletHandler.Start()
 }
 
-// Stop stop the process.
-func (h *Process) Stop() {
-	h.TaskletHandler.Disable()
-	if h.cmdListener != nil {
-		h.cmdListener.Stop()
-	}
-	h.TaskletHandler.Stop()
+// Stop disables the underlying tasklet and blocks until its execution loop
+// has terminated.
+func (p *Process) Stop() error {
+	p.TaskletHandler.Disable()
+	return p.TaskletHandler.Stop()
 }

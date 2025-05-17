@@ -6,171 +6,180 @@ package proc
 
 import (
 	"bytes"
+	"errors"
+	"fmt"
 	"runtime/debug"
+	"sync"
 	"sync/atomic"
-	"time"
 
 	"github.com/exonlabs/go-utils/pkg/events"
 	"github.com/exonlabs/go-utils/pkg/logging"
 )
 
-// Tasklet defines the interface for tasklets.
+var (
+	ErrTskStarted = errors.New("tasklet already started")
+)
+
+// Tasklet defines the three life‑cycle hooks required for a managed job.
 type Tasklet interface {
-	Initialize() error
-	Execute() error
-	Terminate() error
+	Initialize() error // prepares resources
+	Execute() error    // performs one unit of work
+	Terminate() error  // releases resources
 }
 
-// TaskletHandler manages a Tasklet's lifecycle.
+// TaskletHandler coordinates a Tasklet's life cycle, providing enable/disable
+// flags, liveness tracking, and cooperative sleep/stop primitives.
 type TaskletHandler struct {
-	// Log is the logger instance for application logging.
+	// application logger instance
 	Log *logging.Logger
 
-	// The tasklet instance to manage
+	// the tasklet instance to manage
 	tasklet Tasklet
 
 	// flag determines if routine should be enabled or not
 	isEnabled atomic.Bool
 	// flag to track current tasklet execution state
 	isAlive atomic.Bool
-	// flag to track current tasklet initialization state
-	isInitialized atomic.Bool
 
-	// termEvent signals a termination operation.
-	termEvent *events.Event
-	// killEvent signals a forceful termination operation.
-	killEvent *events.Event
+	// starting sync mutex
+	startMutex sync.Mutex
+	// stopping sync mutex
+	stopMutex sync.Mutex
+	// stopEvent signals a stop operation.
+	stopEvent events.Event
+	// killEvent signals multiple stop operation to stop immediately.
+	killEvent events.Event
+	// termEvent signals a terminate operation.
+	termEvent events.Event
+
+	// delay in seconds to apply after errors in execution loop.
+	ErrorDelay float64
 }
 
-// NewTaskletHandler creates a new tasklet handler.
+// NewTaskletHandler returns a TaskletHandler that manages the supplied Tasklet
+// and logs via the provided logger.
 func NewTaskletHandler(log *logging.Logger, tsk Tasklet) *TaskletHandler {
 	return &TaskletHandler{
-		Log:       log,
-		tasklet:   tsk,
-		termEvent: events.New(),
-		killEvent: events.New(),
+		Log:        log,
+		tasklet:    tsk,
+		ErrorDelay: 1,
 	}
 }
 
-// IsEnabled returns whether the tasklet is currently enabled.
+// IsEnabled reports whether the tasklet is currently marked as enabled.
 func (h *TaskletHandler) IsEnabled() bool {
 	return h.isEnabled.Load()
 }
 
-// IsAlive returns whether the tasklet is currently active and running.
+// IsAlive reports whether the tasklet's execution loop is running.
 func (h *TaskletHandler) IsAlive() bool {
 	return h.isAlive.Load()
 }
 
-// IsInitialized returns whether the tasklet is currently initialized.
-func (h *TaskletHandler) IsInitialized() bool {
-	return h.isInitialized.Load()
-}
-
-// Enable sets the tasklet as enabled
+// Enable marks the tasklet as enabled, allowing Start to run or continue.
 func (h *TaskletHandler) Enable() {
 	h.isEnabled.Store(true)
 }
 
-// Disable sets the tasklet as disabled
+// Disable marks the tasklet as disabled, causing Start to exit its loop.
 func (h *TaskletHandler) Disable() {
 	h.isEnabled.Store(false)
 }
 
-// Run initiates the tasklet lifecycle, handling initialization,
-// execution, and termination.
-func (h *TaskletHandler) Run() {
-	// set default logger
-	if h.Log == nil {
-		h.Log = logging.NewStdoutLogger("tasklet")
-		h.Log.SetFormatter(logging.BasicFormatter)
+// runs the tasklet lifecycle, return error in case of error
+// in the tasklet initialization.
+func (h *TaskletHandler) run() error {
+	// initialize the tasklet
+	if err := h.tasklet.Initialize(); err != nil {
+		return err
 	}
 
+	h.isAlive.Store(true)
 	defer func() {
+		h.isAlive.Store(false)
 		// Panic recovery to handle unexpected errors during execution.
 		if r := recover(); r != nil {
 			stack := debug.Stack()
 			indx := bytes.Index(stack, []byte("panic({"))
-			h.Log.Error("%s", r)
-			h.Log.Trace("\n----------\n%s----------", stack[indx:])
-		}
-		// Ensure termination execute if initialized and not killed.
-		if h.isInitialized.Load() && !h.killEvent.IsSet() {
-			if err := h.tasklet.Terminate(); err != nil {
-				h.Log.Error("termination failed: %s", err.Error())
+			if h.Log != nil {
+				h.Log.Panic("%v\n----------\n%s----------", r, stack[indx:])
+			} else {
+				fmt.Printf("%v\n----------\n%s----------\n", r, stack[indx:])
 			}
+			h.Sleep(h.ErrorDelay)
 		}
 	}()
 
-	h.termEvent.Clear()
+	h.stopEvent.Clear()
 	h.killEvent.Clear()
+	h.termEvent.Clear()
 
-	// Attempt to initialize the tasklet.
-	if err := h.tasklet.Initialize(); err != nil {
-		h.Log.Error("initialization failed: %s", err.Error())
-		return
-	}
-	h.isInitialized.Store(true)
-
-	// Run tasklet execution loop until a termination event is set.
-	for !h.termEvent.IsSet() {
+	// Run tasklet execution loop until a stop event.
+	for !h.stopEvent.IsSet() {
 		if err := h.tasklet.Execute(); err != nil {
-			h.Log.Error("execution error: %s", err.Error())
+			if h.Log != nil {
+				h.Log.Error(err.Error())
+			} else {
+				fmt.Printf("error: %s\n", err.Error())
+			}
+			h.Sleep(h.ErrorDelay)
 		}
 	}
+	return nil
 }
 
-// Start initiates the tasklet lifecycle, handling initialization,
-// execution, and termination.
-func (h *TaskletHandler) Start() {
-	h.isAlive.Store(true)
-	defer h.isAlive.Store(false)
+// Start runs the full life cycle while the tasklet is enabled and sets the
+// liveness flag for the duration. start return error if already started.
+func (h *TaskletHandler) Start() error {
+	if !h.startMutex.TryLock() {
+		return ErrTskStarted
+	}
+	defer h.startMutex.Unlock()
 
 	for h.isEnabled.Load() {
-		h.Run()
+		if err := h.run(); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
-// Stop gracefully stops the tasklet by setting the termination event.
-func (h *TaskletHandler) Stop() {
-	// If already stopping, forcefully kill.
-	if h.termEvent.IsSet() {
+// Stop requests graceful termination: it signals the execute loop to exit and
+// invokes the Tasklet's Terminate method once.
+func (h *TaskletHandler) Stop() error {
+	if h.stopEvent.IsSet() {
 		h.killEvent.Set()
 	} else {
-		h.termEvent.Set()
+		h.stopEvent.Set()
 	}
+
+	if !h.stopMutex.TryLock() {
+		return nil
+	}
+	defer h.stopMutex.Unlock()
+
+	h.termEvent.Clear()
+	defer h.termEvent.Set()
+
+	if h.isAlive.Load() {
+		return h.tasklet.Terminate()
+	}
+	return nil
 }
 
-// Kill terminates the tasklet by setting both kill and termination events.
-func (h *TaskletHandler) Kill() {
-	h.killEvent.Set()
-	h.termEvent.Set()
-}
-
-// Sleep pauses execution for the given timeout duration (in seconds),
-// and waits for either a termination or kill event.
+// Sleep pauses execution for the given timeout duration in seconds. it returns
+// true if timeout reached without stop function is called, false other wise.
+// Setting timeout 0 or negative value will wait indefinitely untill stop
+// function is called. if multiple stop is called then returns immediately.
 func (h *TaskletHandler) Sleep(timeout float64) bool {
-	// Wait for kill event if termination is already set.
-	if h.termEvent.IsSet() {
+	if h.stopEvent.IsSet() {
 		return h.killEvent.Wait(timeout)
 	}
-	return h.termEvent.Wait(timeout)
+	return h.stopEvent.Wait(timeout)
 }
 
-// WaitStop waits for tasklet to stop for the given timeout duration (in seconds),
-// returns true if tasklet is stopped before timeout is reached.
-func (h *TaskletHandler) WaitStop(timeout float64) bool {
-	var tBreak time.Time
-	if timeout > 0 {
-		tBreak = time.Now().Add(time.Duration(timeout * float64(time.Second)))
-	}
-	for h.Sleep(0.05) {
-		if !h.isAlive.Load() {
-			return true
-		}
-		if timeout > 0 && time.Now().After(tBreak) {
-			return false
-		}
-	}
-	return false
+// WaitTerm waits for tasklet terminate finish for timeout duration in seconds,
+// returns true if tasklet terminate finishes before timeout is reached.
+func (h *TaskletHandler) WaitTerm(timeout float64) bool {
+	return !h.termEvent.Wait(timeout)
 }
