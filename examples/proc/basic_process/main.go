@@ -22,7 +22,7 @@ type SampleProcess struct {
 
 func NewSampleProcess(log *logging.Logger) *SampleProcess {
 	p := &SampleProcess{}
-	p.Process = proc.NewProcessHandler(log, p)
+	p.Process = proc.NewProcess(log, p)
 
 	// set custom signal handler
 	p.Process.SetSignalHandler(syscall.SIGQUIT, p.handleSigQuit)
@@ -54,7 +54,7 @@ func (p *SampleProcess) Terminate() error {
 	p.Log.Info("terminating")
 
 	// terminate activity after few seconds
-	exitSec := 3
+	exitSec := 5
 	for i := exitSec; i > 0; i-- {
 		p.Log.Info("exit after %d sec", i)
 		p.Sleep(1)
@@ -96,15 +96,13 @@ func main() {
 	log.Info("**** starting ****")
 
 	p := NewSampleProcess(log)
-
 	if err := p.Start(); err != nil {
 		log.Error(err.Error())
 		return
 	}
 
-	if !p.WaitTerm(10) {
+	if !p.Join(10) {
 		log.Warn("timeout waiting to stop ... exit anyway")
-	} else {
-		log.Info("exit")
 	}
+	log.Info("exit")
 }

@@ -13,25 +13,26 @@ import (
 	"syscall"
 
 	"github.com/exonlabs/go-utils/pkg/logging"
+	"github.com/exonlabs/go-utils/pkg/tasklet"
 )
 
 type SignalHandler func() error
 
 // Process manages OS‑signal handling and delegates lifecycle control to an
-// embedded TaskletHandler.
+// embedded Tasklet.
 type Process struct {
-	*TaskletHandler
+	*tasklet.AsyncTasklet
 
 	// Map of signal handlers.
 	sigHandlers map[os.Signal]SignalHandler
 }
 
-// NewProcessHandler returns a Process that wraps the provided TaskletHandler
+// NewProcess returns a Process that wraps the provided Tasklet
 // and installs default handlers for SIGINT, SIGTERM, SIGKILL, SIGQUIT and
 // SIGHUP.
-func NewProcessHandler(log *logging.Logger, tsk Tasklet) *Process {
+func NewProcess(log *logging.Logger, job tasklet.Job) *Process {
 	p := &Process{
-		TaskletHandler: NewTaskletHandler(log, tsk),
+		AsyncTasklet: tasklet.NewAsyncTasklet(log, job),
 	}
 	p.sigHandlers = map[os.Signal]SignalHandler{
 		syscall.SIGINT:  p.Stop, // Handle interruption signals (Ctrl+C).
@@ -102,13 +103,13 @@ func (p *Process) Start() error {
 	}()
 
 	// Start the tasklet lifecycle.
-	p.TaskletHandler.Enable()
-	return p.TaskletHandler.Start()
+	p.AsyncTasklet.Enable()
+	return p.AsyncTasklet.Start()
 }
 
 // Stop disables the underlying tasklet and blocks until its execution loop
 // has terminated.
 func (p *Process) Stop() error {
-	p.TaskletHandler.Disable()
-	return p.TaskletHandler.Stop()
+	p.AsyncTasklet.Disable()
+	return p.AsyncTasklet.Stop()
 }

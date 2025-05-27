@@ -13,21 +13,22 @@ import (
 
 	"github.com/exonlabs/go-utils/pkg/logging"
 	"github.com/exonlabs/go-utils/pkg/proc"
+	"github.com/exonlabs/go-utils/pkg/tasklet"
 )
 
 // global counter
 var counter atomic.Int32
 
 type Routine1 struct {
-	*proc.RoutineHandler
-	Manager *proc.RoutineManager
+	*tasklet.SyncTasklet
+	Manager *proc.TaskletManager
 }
 
-func NewRoutine1(log *logging.Logger, rm *proc.RoutineManager) *Routine1 {
+func NewRoutine1(log *logging.Logger, rm *proc.TaskletManager) *Routine1 {
 	rt := &Routine1{
 		Manager: rm,
 	}
-	rt.RoutineHandler = proc.NewRoutineHandler(log, rt)
+	rt.SyncTasklet = tasklet.NewSyncTasklet(log, rt)
 	return rt
 }
 
@@ -45,10 +46,10 @@ func (rt *Routine1) Execute() error {
 	switch count {
 	case 5:
 		rt.Log.Info("stop rt2 at count=%d", count)
-		rt.Manager.StopRoutine("rt2")
+		rt.Manager.StopTasklet("rt2")
 	case 10:
 		rt.Log.Info("start rt2 at count=%d", count)
-		rt.Manager.StartRoutine("rt2")
+		rt.Manager.StartTasklet("rt2")
 	}
 
 	rt.Sleep(1)
@@ -70,15 +71,15 @@ func (rt *Routine1) Terminate() error {
 }
 
 type Routine2 struct {
-	*proc.RoutineHandler
-	Manager *proc.RoutineManager
+	*tasklet.SyncTasklet
+	Manager *proc.TaskletManager
 }
 
-func NewRoutine2(log *logging.Logger, rm *proc.RoutineManager) *Routine2 {
+func NewRoutine2(log *logging.Logger, rm *proc.TaskletManager) *Routine2 {
 	rt := &Routine2{
 		Manager: rm,
 	}
-	rt.RoutineHandler = proc.NewRoutineHandler(log, rt)
+	rt.SyncTasklet = tasklet.NewSyncTasklet(log, rt)
 	return rt
 }
 
@@ -94,10 +95,11 @@ func (rt *Routine2) Execute() error {
 	switch count {
 	case 15:
 		rt.Log.Info("reset myself at count=%d", count)
-		rt.Stop()
+		rt.Sleep(1)
+		go rt.Stop()
 	case 20:
 		rt.Log.Info("stopping process at count=%d", count)
-		rt.Manager.Stop()
+		go rt.Manager.Stop()
 	}
 
 	rt.Sleep(0.5)
@@ -137,19 +139,19 @@ func main() {
 
 	counter.Store(0)
 
-	rm := proc.NewRoutineManager(log)
-	rm.StoppingDelay = 5
+	rm := proc.NewTaskletManager(log)
+	rm.StoppingDelay = 10
 
 	rt1 := NewRoutine1(log.ChildLogger("rt1"), rm)
 	rt1.Enable()
-	if err := rm.AddRoutine("rt1", rt1); err != nil {
+	if err := rm.AddTasklet("rt1", rt1); err != nil {
 		log.Error(err.Error())
 		return
 	}
 
 	rt2 := NewRoutine2(log.ChildLogger("rt2"), rm)
 	rt2.Enable()
-	if err := rm.AddRoutine("rt2", rt2); err != nil {
+	if err := rm.AddTasklet("rt2", rt2); err != nil {
 		log.Error(err.Error())
 		return
 	}
@@ -159,9 +161,8 @@ func main() {
 		return
 	}
 
-	if !rm.WaitTerm(10) {
+	if !rm.Join(10) {
 		log.Warn("timeout waiting to stop ... exit anyway")
-	} else {
-		log.Info("exit")
 	}
+	log.Info("exit")
 }
