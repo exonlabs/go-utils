@@ -10,13 +10,19 @@ import (
 	"time"
 )
 
-const (
-	// standard time format for log messages
-	STD_TIME_FORMAT = "2006-01-02 15:04:05.000000"
-)
-
 // Formatter defines function for formatting log record into messages.
 type Formatter func(ts time.Time, lvl Level, src, msg string) string
+
+// FormatStdTime generates standard time format for log messages
+// time format: 2006-01-02 15:04:05.000000
+func FormatStdTime(t time.Time) string {
+	y, m, d := t.Date()
+	h, min, s := t.Clock()
+	us := t.Nanosecond() / 1000 // microseconds
+
+	return fmt.Sprintf(
+		"%04d-%02d-%02d %02d:%02d:%02d.%06d", y, int(m), d, h, min, s, us)
+}
 
 // StdFormatter generates a standard text formatted log message.
 // Format: {time} {level} [{source}] {message}
@@ -26,7 +32,7 @@ type Formatter func(ts time.Time, lvl Level, src, msg string) string
 //	2006-01-02 15:04:05.000000 INFO [logger_name] log message
 func StdFormatter(ts time.Time, lvl Level, src, msg string) string {
 	return fmt.Sprintf("%s %-5s [%s] %s",
-		ts.Format(STD_TIME_FORMAT), lvl, src, msg)
+		FormatStdTime(ts), lvl, src, msg)
 }
 
 // BasicFormatter generates a basic formatted text log message.
@@ -37,7 +43,7 @@ func StdFormatter(ts time.Time, lvl Level, src, msg string) string {
 //	2006-01-02 15:04:05.000000 INFO log message
 func BasicFormatter(ts time.Time, lvl Level, src, msg string) string {
 	return fmt.Sprintf("%s %-5s %s",
-		ts.Format(STD_TIME_FORMAT), lvl, msg)
+		FormatStdTime(ts), lvl, msg)
 }
 
 // RawFormatter generates a minimal formatted text log message.
@@ -48,7 +54,7 @@ func BasicFormatter(ts time.Time, lvl Level, src, msg string) string {
 //	2006-01-02 15:04:05.000000 log message
 func RawFormatter(ts time.Time, lvl Level, src, msg string) string {
 	return fmt.Sprintf("%s %s",
-		ts.Format(STD_TIME_FORMAT), msg)
+		FormatStdTime(ts), msg)
 }
 
 // JsonFormatter generates a JSON formatted text log message.
@@ -61,5 +67,5 @@ func JsonFormatter(ts time.Time, lvl Level, src, msg string) string {
 	msg = strings.ReplaceAll(msg, `"`, `\"`)
 	return fmt.Sprintf(
 		`{"time": "%s", "level": "%s", "source": "%s", "message": "%s"}`,
-		ts.Format(STD_TIME_FORMAT), lvl, src, msg)
+		FormatStdTime(ts), lvl, src, msg)
 }

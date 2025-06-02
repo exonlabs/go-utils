@@ -141,6 +141,17 @@ func (l *Logger) ClearHandlers() {
 	l.handlers = nil
 }
 
+// check weather logging will be actually done or not
+func (l *Logger) check_logging(lvl Level) bool {
+	if lvl >= l.Level && l.handlers != nil {
+		return true
+	}
+	if l.parent != nil {
+		return l.parent.check_logging(lvl)
+	}
+	return false
+}
+
 // Log handles a log message, sending it to all handlers and parents.
 func (l *Logger) Log(lvl Level, msg string) error {
 	var errAll error
@@ -167,56 +178,77 @@ func (l *Logger) Log(lvl Level, msg string) error {
 
 // Panic logs a record with Panic level.
 func (l *Logger) Panic(msg string, args ...any) error {
-	return l.Log(PANIC, l.formatter(
-		time.Now().Local(), PANIC, l.name,
-		fmt.Sprintf(l.Prefix+msg+l.Suffix, args...),
-	))
+	if l.check_logging(PANIC) {
+		return l.Log(PANIC, l.formatter(
+			time.Now().Local(), PANIC, l.name,
+			fmt.Sprintf(l.Prefix+msg+l.Suffix, args...),
+		))
+	}
+	return nil
 }
 
 // Fatal logs a record with Fatal level.
 func (l *Logger) Fatal(msg string, args ...any) error {
-	return l.Log(FATAL, l.formatter(
-		time.Now().Local(), FATAL, l.name,
-		fmt.Sprintf(l.Prefix+msg+l.Suffix, args...),
-	))
+	if l.check_logging(FATAL) {
+		return l.Log(FATAL, l.formatter(
+			time.Now().Local(), FATAL, l.name,
+			fmt.Sprintf(l.Prefix+msg+l.Suffix, args...),
+		))
+	}
+	return nil
 }
 
 // Error logs a record with Error level.
 func (l *Logger) Error(msg string, args ...any) error {
-	return l.Log(ERROR, l.formatter(
-		time.Now().Local(), ERROR, l.name,
-		fmt.Sprintf(l.Prefix+msg+l.Suffix, args...),
-	))
+	if l.check_logging(ERROR) {
+		return l.Log(ERROR, l.formatter(
+			time.Now().Local(), ERROR, l.name,
+			fmt.Sprintf(l.Prefix+msg+l.Suffix, args...),
+		))
+	}
+	return nil
 }
 
 // Warn logs a record with Warn level.
 func (l *Logger) Warn(msg string, args ...any) error {
-	return l.Log(WARN, l.formatter(
-		time.Now().Local(), WARN, l.name,
-		fmt.Sprintf(l.Prefix+msg+l.Suffix, args...),
-	))
+	if l.check_logging(WARN) {
+		return l.Log(WARN, l.formatter(
+			time.Now().Local(), WARN, l.name,
+			fmt.Sprintf(l.Prefix+msg+l.Suffix, args...),
+		))
+	}
+	return nil
 }
 
 // Info logs a record with Info level.
 func (l *Logger) Info(msg string, args ...any) error {
-	return l.Log(INFO, l.formatter(
-		time.Now().Local(), INFO, l.name,
-		fmt.Sprintf(l.Prefix+msg+l.Suffix, args...),
-	))
+	if l.check_logging(INFO) {
+		return l.Log(INFO, l.formatter(
+			time.Now().Local(), INFO, l.name,
+			fmt.Sprintf(l.Prefix+msg+l.Suffix, args...),
+		))
+	}
+	return nil
 }
 
 // Debug logs a record with Debug level.
 func (l *Logger) Debug(msg string, args ...any) error {
-	return l.Log(DEBUG, l.formatter(
-		time.Now().Local(), DEBUG, l.name,
-		fmt.Sprintf(l.Prefix+msg+l.Suffix, args...),
-	))
+	if l.check_logging(DEBUG) {
+		return l.Log(DEBUG, l.formatter(
+			time.Now().Local(), DEBUG, l.name,
+			fmt.Sprintf(l.Prefix+msg+l.Suffix, args...),
+		))
+	}
+	return nil
 }
 
 // Trace logs a record with Trace level.
 func (l *Logger) Trace(msg string, args ...any) error {
-	return l.Log(TRACE, l.formatter(
-		time.Now().Local(), TRACE, l.name,
-		fmt.Sprintf(l.Prefix+msg+l.Suffix, args...),
-	))
+	if l.check_logging(TRACE) {
+		return l.Log(TRACE, l.formatter(
+			time.Now().Local(), TRACE, l.name,
+			fmt.Sprintf(l.Prefix+msg+l.Suffix, args...),
+		))
+	}
+	return nil
 }
