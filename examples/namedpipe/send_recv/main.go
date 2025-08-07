@@ -14,7 +14,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/exonlabs/go-utils/pkg/unix/namedpipes"
+	"github.com/exonlabs/go-utils/pkg/unix/namedpipe"
 )
 
 // Description:
@@ -32,7 +32,7 @@ var wg sync.WaitGroup
 
 // Sender struct encapsulates a named pipe used for sending messages.
 type Sender struct {
-	Pipe *namedpipes.NamedPipe
+	Pipe *namedpipe.NamedPipe
 }
 
 // Print formats and prints messages for the Sender.
@@ -49,7 +49,7 @@ func (s *Sender) CheckPeer(timeout float64) {
 	s.Print("-- sending >> " + msg)
 	// Attempt to send message with timeout to check for peer.
 	if err := s.Pipe.Write([]byte(msg), timeout); err != nil {
-		if errors.Is(err, namedpipes.ErrTimeout) {
+		if errors.Is(err, namedpipe.ErrTimeout) {
 			s.Print("-- TIMEOUT: no peer connected")
 		} else {
 			s.Print("-- FAILED: %v", err)
@@ -77,7 +77,7 @@ func (s *Sender) SendMessages(timeout float64) {
 
 // Receiver struct encapsulates a named pipe used for receiving messages.
 type Receiver struct {
-	Pipe *namedpipes.NamedPipe
+	Pipe *namedpipe.NamedPipe
 }
 
 // Print formats and prints messages for the Receiver.
@@ -96,7 +96,7 @@ func (r *Receiver) WaitMessages(timeout float64) {
 		// Attempt to read from pipe, handling different error cases.
 		b, err := r.Pipe.Read(timeout)
 		if err != nil {
-			if err == namedpipes.ErrBreak {
+			if err == namedpipe.ErrBreak {
 				break
 			} else {
 				r.Print("-- %v", err)
@@ -113,18 +113,18 @@ func main() {
 	fmt.Printf("\nUsing Pipe: %s\n", PipePath)
 
 	// Create named pipe with specified permissions, handling creation error.
-	if err := namedpipes.Create(PipePath, 0o666); err != nil {
+	if err := namedpipe.Create(PipePath, 0o666); err != nil {
 		fmt.Printf("Failed to create pipe: %v\n", err)
 		return
 	}
-	defer namedpipes.Delete(PipePath)
+	defer namedpipe.Delete(PipePath)
 
 	// Initialize Sender and Receiver with the created named pipe.
 	sender := &Sender{
-		Pipe: namedpipes.New(PipePath, nil),
+		Pipe: namedpipe.New(PipePath, nil),
 	}
 	receiver := &Receiver{
-		Pipe: namedpipes.New(PipePath, nil),
+		Pipe: namedpipe.New(PipePath, nil),
 	}
 
 	// Check peer status without a connected peer.

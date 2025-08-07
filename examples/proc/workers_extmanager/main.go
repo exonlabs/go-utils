@@ -18,23 +18,24 @@ import (
 	"github.com/exonlabs/go-utils/pkg/comm/sockcomm"
 	"github.com/exonlabs/go-utils/pkg/logging"
 	"github.com/exonlabs/go-utils/pkg/proc"
+	"github.com/exonlabs/go-utils/pkg/tasklet"
 )
 
 var (
 	manage_sock = filepath.Join(os.TempDir(), "manage_sock")
 
-	wrkManager *proc.RoutineManager
+	wrkManager *proc.TaskletManager
 	workers    atomic.Int32
 	wrkIndx    atomic.Int32
 )
 
 type Worker struct {
-	*proc.RoutineHandler
+	*tasklet.SyncTasklet
 }
 
 func NewWorker(log *logging.Logger) *Worker {
 	wk := &Worker{}
-	wk.RoutineHandler = proc.NewRoutineHandler(log, wk)
+	wk.SyncTasklet = tasklet.NewSyncTasklet(log, wk)
 	return wk
 }
 
@@ -62,7 +63,7 @@ func HandleCommand(cmd string) string {
 		wrkManager.Stop()
 
 	case "list_workers":
-		workers := wrkManager.ListRoutines()
+		workers := wrkManager.ListTasklets()
 		sort.Strings(workers)
 		res := strings.Join(workers, ",")
 		if len(res) > 0 {
@@ -76,7 +77,7 @@ func HandleCommand(cmd string) string {
 		}
 		wname := fmt.Sprintf("wrk%d", workers.Load()+1)
 		wrk := NewWorker(wrkManager.Log.ChildLogger(wname))
-		if err := wrkManager.AddRoutine(wname, wrk, true); err != nil {
+		if err := wrkManager.AddTasklet(wname, wrk); err != nil {
 			fmt.Println(err.Error())
 			return "FAILED"
 		}
@@ -86,7 +87,7 @@ func HandleCommand(cmd string) string {
 	case "del_worker":
 		if wrkIndx.Load() <= workers.Load() {
 			wname := fmt.Sprintf("wrk%d", wrkIndx.Load())
-			if err := wrkManager.DelRoutine(wname); err != nil {
+			if err := wrkManager.DeleteTasklet(wname); err != nil {
 				fmt.Println(err.Error())
 				return "FAILED"
 			}
@@ -101,7 +102,7 @@ func HandleCommand(cmd string) string {
 			return "MISSING_PARAM"
 		}
 		wname := fmt.Sprintf("wrk%s", strings.TrimSpace(p[1]))
-		if err := wrkManager.StartRoutine(wname); err != nil {
+		if err := wrkManager.StartTasklet(wname); err != nil {
 			fmt.Println(err.Error())
 			return "FAILED"
 		}
@@ -111,7 +112,7 @@ func HandleCommand(cmd string) string {
 			return "MISSING_PARAM"
 		}
 		wname := fmt.Sprintf("wrk%s", strings.TrimSpace(p[1]))
-		if err := wrkManager.StopRoutine(wname); err != nil {
+		if err := wrkManager.StopTasklet(wname); err != nil {
 			fmt.Println(err.Error())
 			return "FAILED"
 		}
@@ -121,7 +122,7 @@ func HandleCommand(cmd string) string {
 			return "MISSING_PARAM"
 		}
 		wname := fmt.Sprintf("wrk%s", strings.TrimSpace(p[1]))
-		if err := wrkManager.RestartRoutine(wname); err != nil {
+		if err := wrkManager.RestartTasklet(wname); err != nil {
 			fmt.Println(err.Error())
 			return "FAILED"
 		}
@@ -171,20 +172,20 @@ func main() {
 	workers.Store(3)
 	wrkIndx.Store(1)
 
-	commListener, err := sockcomm.NewListener(
+	cmdListener, err := sockcomm.NewListener(
 		fmt.Sprintf("sock@%s", manage_sock), commLog, nil)
 	if err != nil {
 		log.Error(err.Error())
 		return
 	}
 
-	wrkManager = proc.NewRoutineManager(log)
-	wrkManager.SetCmdHandler(commListener, HandleCommand)
+	wrkManager = proc.NewTaskletManager(log)
+	// wrkManager.SetCmdHandler(commListener, HandleCommand)
 
 	for i := int32(1); i <= workers.Load(); i++ {
 		wname := fmt.Sprintf("wrk%d", i)
 		wrk := NewWorker(log.ChildLogger(wname))
-		if err := wrkManager.AddRoutine(wname, wrk, true); err != nil {
+		if err := wrkManager.AddTasklet(wname, wrk); err != nil {
 			log.Error(err.Error())
 			return
 		}

@@ -410,7 +410,7 @@ func (c *Connection) RecvFrom(timeout float64) ([]byte, any, error) {
 	var addr net.Addr
 
 	b := make([]byte, nRead)
-	for {
+	for err == nil {
 		if conn, ok := c.netConn.(net.PacketConn); ok && c.parent != nil {
 			if timeout > 0 {
 				conn.SetReadDeadline(tDeadline)
@@ -423,16 +423,19 @@ func (c *Connection) RecvFrom(timeout float64) ([]byte, any, error) {
 			return nil, nil, errors.New("invalid connection type")
 		}
 		if err != nil {
-			if comm.IsClosedError(err) || comm.IsTLSError(err) {
-				c.closeEvent.Store(true)
-				comm.LogMsg(c.Log, "CONN_CLOSED -- %v", err)
-				go c.Close()
-				return nil, nil, comm.ErrClosed
-			}
-			if _, ok := err.(net.Error); !ok || !err.(net.Error).Timeout() {
+			if comm.IsClosedError(err) {
+				comm.LogMsg(c.Log, "CONN_ERROR -- %v", err)
+				err = comm.ErrClosed
+			} else if comm.IsTLSError(err) {
+				comm.LogMsg(c.Log, "TLS_ERROR -- %v", err)
+				err = comm.ErrClosed
+			} else if _, ok := err.(net.Error); !ok || !err.(net.Error).Timeout() {
 				comm.LogMsg(c.Log, "RECV_ERROR -- %v", err)
-				return nil, nil, fmt.Errorf("%w, %v", comm.ErrRecv, err)
+				err = fmt.Errorf("%w, %v", comm.ErrRecv, err)
 			}
+		} else if c.parent != nil && c.parent.stopEvent.Load() {
+			comm.LogMsg(c.Log, "STOP_EVENT")
+			err = comm.ErrClosed
 		}
 
 		if n > 0 {
@@ -452,19 +455,23 @@ func (c *Connection) RecvFrom(timeout float64) ([]byte, any, error) {
 			break
 		}
 
-		if c.parent != nil && c.parent.stopEvent.Load() {
-			return nil, nil, comm.ErrClosed
-		}
-		if c.breakRecvEvent.Load() {
-			return nil, nil, comm.ErrBreak
-		}
-		if timeout > 0 && time.Now().After(tDeadline) {
-			return nil, nil, comm.ErrTimeout
+		if err == nil {
+			if c.breakRecvEvent.Load() {
+				comm.LogMsg(c.Log, "BREAK_EVENT")
+				err = comm.ErrBreak
+			} else if timeout > 0 && time.Now().After(tDeadline) {
+				err = comm.ErrTimeout
+			}
 		}
 	}
-
 	comm.LogRx(c.Log, data, addr)
-	return data, addr, nil
+
+	// close comm
+	if err == comm.ErrClosed {
+		c.Close()
+	}
+
+	return data, addr, err
 }
 
 /////////////////////////////////////////////////////

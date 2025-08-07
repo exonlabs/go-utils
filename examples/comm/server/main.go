@@ -88,11 +88,11 @@ func HandleConnection(conn comm.Connection) {
 
 		switch msg {
 		case "STOP_PEER":
-			conn.SendTo([]byte("peer stopped by server"), addr, -1)
+			conn.SendTo([]byte("peer stopped by server\n"), addr, -1)
 			conn.Close()
 			return
 		case "STOP_SERVER":
-			conn.SendTo([]byte("server stopped"), addr, -1)
+			conn.SendTo([]byte("server stopped\n"), addr, -1)
 			conn.Parent().Stop()
 			return
 		default:
@@ -106,8 +106,6 @@ func HandleConnection(conn comm.Connection) {
 }
 
 func main() {
-	fmt.Printf("\n**** starting ****\n")
-
 	com := "/dev/ttyUSB0"
 	if runtime.GOOS == "windows" {
 		com = "COM1"
@@ -125,6 +123,13 @@ func main() {
 	mtls := flag.Bool(
 		"mtls", false, "use Mutual-TLS authentication for TCP connections")
 	flag.Parse()
+
+	if len(*uri) <= 0 {
+		fmt.Printf("\nError: uri value is required\n\n")
+		return
+	}
+
+	fmt.Printf("\n**** starting ****\n")
 
 	commLog := logging.NewStdoutLogger("comm")
 	commLog.SetFormatter(logging.RawFormatter)

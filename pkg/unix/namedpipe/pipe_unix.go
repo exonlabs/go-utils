@@ -4,7 +4,7 @@
 
 //go:build !windows
 
-package namedpipes
+package namedpipe
 
 import (
 	"errors"
