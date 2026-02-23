@@ -123,6 +123,9 @@ type Connection struct {
 
 	// PollConfig defines the read polling.
 	PollConfig *comm.PollingConfig
+
+	mulastTx sync.Mutex
+	lastTx   []byte
 }
 
 // NewConnection creates and initializes a new Connection for the given URI.
@@ -153,6 +156,8 @@ func NewConnection(uri string, log *logging.Logger, opts dictx.Dict) (*Connectio
 	// set to max of "user defined", "0.02 mSec" or "20 bytes duration".
 	c.PollConfig.Timeout = gx.Max(
 		c.PollConfig.Timeout, 0.02, 20.0/float64(mode.BaudRate))
+
+	c.lastTx = make([]byte, 0, 2048)
 
 	return c, nil
 }
@@ -233,7 +238,9 @@ func (c *Connection) Close() {
 	if !c.isOpened.Load() {
 		return
 	}
-
+	c.mulastTx.Lock()
+	c.lastTx = c.lastTx[:0]
+	c.mulastTx.Unlock()
 	// close port clean buffers
 	c.serialPort.Close()
 	c.serialPort.ResetInputBuffer()
@@ -305,7 +312,9 @@ func (c *Connection) SendTo(data []byte, _ any, timeout float64) error {
 	if len(data) == 0 {
 		return errors.New("empty data")
 	}
-
+	c.mulastTx.Lock()
+	c.lastTx = append(c.lastTx[:0], data...) // COPY
+	c.mulastTx.Unlock()
 	// Acquire send lock
 	c.muSend.Lock()
 	defer c.muSend.Unlock()
@@ -341,6 +350,30 @@ func (c *Connection) SendTo(data []byte, _ any, timeout float64) error {
 	}
 
 	return nil
+}
+
+func (c *Connection) stripEcho(rx []byte) []byte {
+	c.mulastTx.Lock()
+	defer c.mulastTx.Unlock()
+
+	tx := c.lastTx
+	if len(tx) == 0 || len(rx) == 0 {
+		return rx
+	}
+	// Only strip if FULL tx equals the beginning of rx
+	if len(rx) < len(tx) {
+		return rx
+	}
+	for i := 0; i < len(tx); i++ {
+		if rx[i] != tx[i] {
+			// Not an echo => do not strip anything
+			return rx
+		}
+	}
+	// Full match => strip echo
+	comm.LogMsg(c.Log, "ignoring echo data: %X", tx)
+	c.lastTx = c.lastTx[:0]
+	return rx[len(tx):]
 }
 
 // Recv waits for incoming data over the connection until a timeout
@@ -392,42 +425,56 @@ func (c *Connection) RecvFrom(timeout float64) ([]byte, any, error) {
 
 	b := make([]byte, nRead)
 	for {
-		n, err := c.serialPort.Read(b)
-		if err != nil {
-			if comm.IsClosedError(err) {
-				c.closeEvent.Store(true)
-				comm.LogMsg(c.Log, "PORT_CLOSED -- %v", err)
-				go c.Close()
-				return nil, nil, comm.ErrClosed
-			}
-			comm.LogMsg(c.Log, "RECV_ERROR -- %v", err)
-			return nil, nil, fmt.Errorf("%w, %v", comm.ErrRecv, err)
-		}
-
-		if n > 0 {
-			data = append(data, b[:n]...)
-			if c.PollConfig.MaxSize > 0 {
-				nRead -= n
-				if nRead <= 0 {
-					break
-				} else {
-					b = b[:nRead]
+		for {
+			n, err := c.serialPort.Read(b)
+			if err != nil {
+				if comm.IsClosedError(err) {
+					c.closeEvent.Store(true)
+					comm.LogMsg(c.Log, "PORT_CLOSED -- %v", err)
+					go c.Close()
+					return nil, nil, comm.ErrClosed
 				}
+				comm.LogMsg(c.Log, "RECV_ERROR -- %v", err)
+				return nil, nil, fmt.Errorf("%w, %v", comm.ErrRecv, err)
 			}
-		} else if len(data) > 0 {
-			break
+
+			if n > 0 {
+				data = append(data, b[:n]...)
+				if c.PollConfig.MaxSize > 0 {
+					nRead -= n
+					if nRead <= 0 {
+						break
+					} else {
+						b = b[:nRead]
+					}
+				}
+			} else if len(data) > 0 {
+				break
+			}
+
+			if c.breakRecvEvent.Load() {
+				return nil, nil, comm.ErrBreak
+			}
+			if timeout > 0 && time.Now().After(tDeadline) {
+				return nil, nil, comm.ErrTimeout
+			}
+		}
+		data = c.stripEcho(data)
+
+		if len(data) == 0 {
+			if c.breakRecvEvent.Load() {
+				return nil, nil, comm.ErrBreak
+			}
+			if timeout > 0 && time.Now().After(tDeadline) {
+				return nil, nil, comm.ErrTimeout
+			}
+			continue
 		}
 
-		if c.breakRecvEvent.Load() {
-			return nil, nil, comm.ErrBreak
-		}
-		if timeout > 0 && time.Now().After(tDeadline) {
-			return nil, nil, comm.ErrTimeout
-		}
+		comm.LogRx(c.Log, data, nil)
+		return data, nil, nil
 	}
 
-	comm.LogRx(c.Log, data, nil)
-	return data, nil, nil
 }
 
 /////////////////////////////////////////////////////
