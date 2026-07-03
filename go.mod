@@ -2,18 +2,16 @@ module github.com/exonlabs/go-utils
 
 // version = "0.10.2.dev"
 
-go 1.23.0
-
-toolchain go1.24.1
+go 1.25.0
 
 require (
 	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/fatih/color v1.18.0
 	github.com/stretchr/testify v1.10.0
 	go.bug.st/serial v1.6.3
-	golang.org/x/net v0.37.0
-	golang.org/x/sys v0.31.0
-	golang.org/x/term v0.30.0
+	golang.org/x/net v0.55.0
+	golang.org/x/sys v0.45.0
+	golang.org/x/term v0.43.0
 )
 
 require (
